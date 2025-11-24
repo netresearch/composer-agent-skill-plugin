@@ -345,7 +345,7 @@ $ composer read-skill database-analyzer
 
 Reading: database-analyzer
 Package: vendor/db-skill v1.2.0
-Location: vendor/vendor/db-skill/SKILL.md
+Base Directory: vendor/vendor/db-skill
 
 ---
 name: database-analyzer
