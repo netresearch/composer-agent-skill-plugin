@@ -110,7 +110,9 @@ final class SkillDiscovery
 
             $skillData = $this->parseSkillFile($packageName, $absolutePath, $relativePath);
             if ($skillData !== null) {
-                $skillData['location'] = str_replace(DIRECTORY_SEPARATOR, '/', $installPath);
+                // Use realpath to resolve canonical path without traversal (../)
+                $realPath = realpath($installPath);
+                $skillData['location'] = str_replace(DIRECTORY_SEPARATOR, '/', $realPath !== false ? $realPath : $installPath);
                 $skillData['package'] = $packageName;
                 $skillData['version'] = $version;
                 $skillData['file'] = $relativePath;
