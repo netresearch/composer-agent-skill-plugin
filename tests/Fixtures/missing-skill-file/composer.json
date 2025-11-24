@@ -1,0 +1,8 @@
+{
+  "name": "test/missing-skill-file",
+  "description": "Test fixture with no SKILL.md file",
+  "type": "ai-agent-skill",
+  "require": {
+    "php": "^8.2"
+  }
+}

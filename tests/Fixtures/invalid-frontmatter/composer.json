@@ -1,0 +1,8 @@
+{
+  "name": "test/invalid-frontmatter",
+  "description": "Test fixture with missing description in SKILL.md",
+  "type": "ai-agent-skill",
+  "require": {
+    "php": "^8.2"
+  }
+}

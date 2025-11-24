@@ -1,0 +1,14 @@
+{
+  "name": "test/valid-multi-skill",
+  "description": "Test fixture for multi-skill package",
+  "type": "ai-agent-skill",
+  "require": {
+    "php": "^8.2"
+  },
+  "extra": {
+    "ai-agent-skill": [
+      "skills/api-helper.md",
+      "skills/debug-assistant.md"
+    ]
+  }
+}

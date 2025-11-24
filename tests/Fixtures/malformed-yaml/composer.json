@@ -1,0 +1,8 @@
+{
+  "name": "test/malformed-yaml",
+  "description": "Test fixture with malformed YAML in SKILL.md",
+  "type": "ai-agent-skill",
+  "require": {
+    "php": "^8.2"
+  }
+}

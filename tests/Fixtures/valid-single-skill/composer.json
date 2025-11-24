@@ -1,0 +1,8 @@
+{
+  "name": "test/valid-single-skill",
+  "description": "Test fixture for single skill package",
+  "type": "ai-agent-skill",
+  "require": {
+    "php": "^8.2"
+  }
+}
