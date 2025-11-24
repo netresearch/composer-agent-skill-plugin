@@ -13,7 +13,7 @@ final class CommandCapability implements CommandProvider
     /**
      * Get all commands provided by this plugin.
      *
-     * @return array<\Symfony\Component\Console\Command\Command>
+     * @return array<\Composer\Command\BaseCommand>
      */
     public function getCommands(): array
     {

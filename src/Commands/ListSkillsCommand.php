@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
+use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-final class ListSkillsCommand extends Command
+final class ListSkillsCommand extends BaseCommand
 {
     protected function configure(): void
     {
