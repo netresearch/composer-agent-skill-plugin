@@ -110,12 +110,13 @@ final class SkillDiscovery
 
             $skillData = $this->parseSkillFile($packageName, $absolutePath, $relativePath);
             if ($skillData !== null) {
-                // Use realpath to resolve canonical path without traversal (../)
-                $realPath = realpath($installPath);
-                $skillData['location'] = str_replace(DIRECTORY_SEPARATOR, '/', $realPath !== false ? $realPath : $installPath);
+                // Base directory is the directory containing SKILL.md
+                $baseDirectory = dirname($absolutePath);
+                $realBaseDir = realpath($baseDirectory);
+                $skillData['location'] = str_replace(DIRECTORY_SEPARATOR, '/', $realBaseDir !== false ? $realBaseDir : $baseDirectory);
                 $skillData['package'] = $packageName;
                 $skillData['version'] = $version;
-                $skillData['file'] = $relativePath;
+                $skillData['file'] = basename($relativePath);
                 $skills[] = $skillData;
             }
         }

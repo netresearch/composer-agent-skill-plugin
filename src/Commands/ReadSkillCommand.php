@@ -70,11 +70,10 @@ final class ReadSkillCommand extends BaseCommand
 
         // Display skill header
         $skillFilePath = $foundSkill['location'] . '/' . $foundSkill['file'];
-        $baseDirectory = dirname($skillFilePath);
         $output->writeln('');
         $output->writeln(sprintf('Reading: %s', $foundSkill['name']));
         $output->writeln(sprintf('Package: %s v%s', $foundSkill['package'], $foundSkill['version']));
-        $output->writeln(sprintf('Base Directory: %s', $baseDirectory));
+        $output->writeln(sprintf('Base Directory: %s', $foundSkill['location']));
         $output->writeln('');
 
         // Read and display full SKILL.md content
