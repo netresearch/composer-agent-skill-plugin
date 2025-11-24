@@ -7,6 +7,7 @@ namespace Netresearch\ComposerAgentSkillPlugin;
 use Composer\Composer;
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\IO\IOInterface;
+use Composer\Plugin\Capability\CommandProvider;
 use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
@@ -59,8 +60,9 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
      */
     public function getCapabilities(): array
     {
-        // Command provider will be added in Phase 3
-        return [];
+        return [
+            CommandProvider::class => CommandCapability::class,
+        ];
     }
 
     /**

@@ -152,10 +152,105 @@ Phase 3: Commands & Integration
 
 ---
 
+## Phase 3: Commands & Integration - COMPLETED
+
+### Completed Tasks:
+- [x] Task 3.1: ListSkillsCommand implemented
+- [x] Task 3.2: ReadSkillCommand implemented
+- [x] Task 3.3: Commands registered
+
+### Validation Results:
+- [x] PHP-CS-Fixer passes
+  - ✅ Fixed 1 file (import ordering in SkillPlugin.php)
+  - ✅ All files PSR-12 compliant
+- [x] PHPStan level 8 passes
+  - ✅ Zero errors after type fixes
+  - ✅ Fixed CommandCapability return type annotation
+  - ✅ Fixed ReadSkillCommand field access ('file' not 'path')
+- [x] CommandCapability implemented
+  - ✅ Returns array of Command instances
+  - ✅ Properly typed PHPDoc annotations
+- [x] Commands registered in SkillPlugin
+  - ✅ getCapabilities() returns CommandProvider::class => CommandCapability::class
+  - ✅ CommandProvider import added
+- [x] Output formats match PRD.md
+  - ✅ ListSkillsCommand: columnar format, sorted alphabetically
+  - ✅ ReadSkillCommand: openskills format with header, content, footer
+  - ✅ Error messages match specification
+- [x] Error handling present
+  - ✅ Empty skill list handled gracefully
+  - ✅ Skill not found shows available skills
+  - ✅ File read errors handled
+
+### Code Review:
+- Output format verified against PRD.md: YES
+- SkillDiscovery integration correct: YES
+- Error messages match specification: YES
+
+### Files Created:
+- src/Commands/ListSkillsCommand.php (79 lines)
+- src/Commands/ReadSkillCommand.php (101 lines)
+- src/CommandCapability.php (25 lines)
+
+### Files Modified:
+- src/SkillPlugin.php:
+  - Added CommandProvider import
+  - Updated getCapabilities() to return CommandCapability
+
+### Issues Encountered:
+- **PHPStan type errors:** CommandCapability return type initially used BaseCommand instead of Command - RESOLVED
+- **Skill array field names:** ReadSkillCommand referenced non-existent 'path' field; correct field is 'file' with 'location' - RESOLVED
+- **Import ordering:** PHP-CS-Fixer reordered imports in SkillPlugin.php for consistency - RESOLVED
+- **Resolution:** All issues resolved, all validation checks passing
+
+### Implementation Details:
+
+**ListSkillsCommand:**
+- Extends Symfony Console Command
+- Command name: 'list-skills'
+- Integrates with SkillDiscovery to fetch all skills
+- Sorts skills alphabetically by name
+- Dynamic column width calculation for clean output
+- Empty state handling with warning message and usage note
+- Summary line with total count and usage hint
+
+**ReadSkillCommand:**
+- Extends Symfony Console Command
+- Command name: 'read-skill'
+- Required argument: skill name
+- Skill lookup by name in discovered skills
+- Full SKILL.md content display matching openskills format
+- Error handling: skill not found shows available skills list
+- File read error handling with clear error messages
+- Header format: Reading, Package, Location
+- Footer format: "Skill read: {name}"
+
+**CommandCapability:**
+- Implements Composer CommandProvider capability
+- Returns array of command instances
+- Properly typed for PHPStan compliance
+
+### Manual Testing Notes:
+- Cannot test commands directly as plugin is not yet installed
+- Output format strings verified against PRD.md
+- Error handling paths tested through code review
+- Integration with SkillDiscovery verified through type checking
+
+### Next Steps:
+Phase 4: Testing & Quality
+- Task 4.1: Create test fixtures
+- Task 4.2: Unit tests for SkillDiscovery
+- Task 4.3: Unit tests for AgentsMdGenerator
+- Task 4.4: Integration tests
+- Task 4.5: Quality checks
+
+---
+
 ## Notes
 
 - Core plugin functionality is complete and production-ready
 - All validation gates pass with zero errors
 - Code follows PSR-12 standards and PHPStan level 8 requirements
 - Edge case handling matches PRD.md specifications exactly
-- Ready to proceed with Phase 3 command implementation
+- Commands implemented following openskills format specifications
+- Ready to proceed with Phase 4 testing implementation
