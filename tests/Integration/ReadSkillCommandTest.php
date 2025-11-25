@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Netresearch\ComposerAgentSkillPlugin\Tests\Integration;
 
-use Composer\Console\Application;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Integration tests for ReadSkillCommand.

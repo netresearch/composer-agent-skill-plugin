@@ -1,0 +1,28 @@
+{
+  "name": "example/database-analyzer-skill",
+  "description": "AI agent skill for database schema analysis and optimization",
+  "type": "ai-agent-skill",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Your Name",
+      "email": "your.email@example.com"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "netresearch/composer-agent-skill-plugin": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Example\\DatabaseAnalyzer\\": "src/"
+    }
+  },
+  "keywords": [
+    "ai-agent",
+    "skill",
+    "database",
+    "analyzer",
+    "optimization"
+  ]
+}

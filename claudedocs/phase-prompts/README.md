@@ -1,7 +1,7 @@
 # Agent Implementation Prompts
 
 **Purpose:** Structured prompts for AI agents to implement the Composer AI Agent Skill Plugin
-**Source Documents:** ../PRD.md, ../WORKFLOW.md
+**Source Documents:** ../docs/PRD.md, ../WORKFLOW.md
 **Last Updated:** 2025-11-24
 
 ---

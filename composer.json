@@ -5,8 +5,10 @@
   "license": "MIT",
   "authors": [
     {
-      "name": "Paul Siedler",
-      "email": "paul.siedler@netresearch.de"
+      "name": "Netresearch DTT GmbH",
+      "email": "plugins@netresearch.de",
+      "homepage": "https://www.netresearch.de/",
+      "role": "Manufacturer"
     }
   ],
   "require": {
