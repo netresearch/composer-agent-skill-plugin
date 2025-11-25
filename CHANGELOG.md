@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2025-11-25
+
+### Added
+- **Working Directory Reminder**: `read-skill` command now displays actionable footer with copy-paste ready `cd` command to help AI agents execute scripts from correct directory
+
+### Changed
+- **AGENTS.md Instructions**: Updated base directory instruction from descriptive to imperative language for clearer guidance
+
 ## [1.1.0] - 2025-11-25
 
 ### Added
@@ -67,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Path Traversal Protection**: Uses `realpath()` to resolve canonical paths
 - **XML Escaping**: Properly escapes skill metadata in generated XML
 
-[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/netresearch/composer-agent-skill-plugin/releases/tag/v1.0.0
