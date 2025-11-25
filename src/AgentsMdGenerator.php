@@ -32,7 +32,7 @@ final class AgentsMdGenerator
         $xml .= 'How to use skills:' . "\n";
         $xml .= '- Invoke: Bash("composer read-skill <skill-name>")' . "\n";
         $xml .= '- The skill content will load with detailed instructions on how to complete the task' . "\n";
-        $xml .= '- Base directory provided in output for resolving bundled resources (references/, scripts/, assets/)' . "\n\n";
+        $xml .= '- IMPORTANT: Always cd to the Base Directory shown in output before executing scripts or accessing bundled resources' . "\n\n";
         $xml .= 'Usage notes:' . "\n";
         $xml .= '- Only use skills listed in <available_skills> below' . "\n";
         $xml .= '- Do not invoke a skill that is already loaded in your context' . "\n";

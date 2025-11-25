@@ -90,6 +90,13 @@ final class ReadSkillCommand extends BaseCommand
             $output->writeln('');
         }
 
+        // Display working directory reminder (helps AI agents use correct path for scripts)
+        $output->writeln('');
+        $output->writeln('---');
+        $output->writeln(sprintf('<info>ℹ️  Working Directory: %s</info>', $foundSkill['location']));
+        $output->writeln(sprintf('<comment>    cd "%s" && your-command</comment>', $foundSkill['location']));
+        $output->writeln('---');
+
         // Display footer
         $output->writeln('');
         $output->writeln(sprintf('Skill read: %s', $foundSkill['name']));
