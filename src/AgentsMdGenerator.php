@@ -34,7 +34,8 @@ final class AgentsMdGenerator
         $xml .= '- The skill content will load with detailed instructions on how to complete the task' . "\n";
         $xml .= '- IMPORTANT: Always cd to the Base Directory shown in output before executing scripts or accessing bundled resources' . "\n\n";
         $xml .= 'Usage notes:' . "\n";
-        $xml .= '- Only use skills listed in <available_skills> below' . "\n";
+        $xml .= '- For project-specific tasks, only use skills listed in <available_skills> below' . "\n";
+        $xml .= '- Note: Native capabilities (e.g., via the Skill tool) remain available alongside project skills' . "\n";
         $xml .= '- Do not invoke a skill that is already loaded in your context' . "\n";
         $xml .= '- Each skill invocation is stateless' . "\n";
         $xml .= '</usage>' . "\n\n";

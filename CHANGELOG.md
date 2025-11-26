@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2025-11-26
+
+### Fixed
+- **Skills Section Clarity**: Clarified that project skills supplement Claude Code's built-in Skill tool capabilities
+  - Changed ambiguous "Only use skills listed" to "For project-specific tasks, only use skills listed"
+  - Added note explaining native capabilities remain available alongside project skills
+  - Prevents AI agents from ignoring their built-in skill system
+
 ## [1.1.1] - 2025-11-25
 
 ### Added
@@ -75,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Path Traversal Protection**: Uses `realpath()` to resolve canonical paths
 - **XML Escaping**: Properly escapes skill metadata in generated XML
 
-[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/netresearch/composer-agent-skill-plugin/releases/tag/v1.0.0

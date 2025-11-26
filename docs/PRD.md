@@ -258,7 +258,8 @@ How to use skills:
 - Base directory provided in output for resolving bundled resources (references/, scripts/, assets/)
 
 Usage notes:
-- Only use skills listed in <available_skills> below
+- For project-specific tasks, only use skills listed in <available_skills> below
+- Note: Native capabilities (e.g., via the Skill tool) remain available alongside project skills
 - Do not invoke a skill that is already loaded in your context
 - Each skill invocation is stateless
 </usage>
@@ -817,7 +818,8 @@ How to use skills:
 - Base directory provided in output for resolving bundled resources (references/, scripts/, assets/)
 
 Usage notes:
-- Only use skills listed in <available_skills> below
+- For project-specific tasks, only use skills listed in <available_skills> below
+- Note: Native capabilities (e.g., via the Skill tool) remain available alongside project skills
 - Do not invoke a skill that is already loaded in your context
 - Each skill invocation is stateless
 </usage>
