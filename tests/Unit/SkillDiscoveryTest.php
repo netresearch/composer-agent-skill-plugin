@@ -20,7 +20,7 @@ final class SkillDiscoveryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->io = $this->createMock(IOInterface::class);
+        $this->io = $this->createStub(IOInterface::class);
         $this->discovery = new SkillDiscovery($this->io);
     }
 
@@ -161,11 +161,14 @@ final class SkillDiscoveryTest extends TestCase
     {
         // Test that warnings are accumulated and can be output
         // Expected: multiple warnings stored, all output together
-        $this->io->expects($this->never())
+        $io = $this->createMock(IOInterface::class);
+        $io->expects($this->never())
             ->method('writeError');
 
+        $discovery = new SkillDiscovery($io);
+
         // With no warnings, no output expected
-        $this->assertInstanceOf(SkillDiscovery::class, $this->discovery);
+        $this->assertInstanceOf(SkillDiscovery::class, $discovery);
     }
 
     public function testMissingRequiredFields(): void
