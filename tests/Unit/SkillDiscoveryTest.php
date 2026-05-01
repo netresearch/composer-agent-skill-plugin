@@ -234,6 +234,44 @@ final class SkillDiscoveryTest extends TestCase
         $this->assertFalse($method->invoke($this->discovery, '../relative'));
     }
 
+    public function testSymlinkEscapingPackageDirectoryIsRejected(): void
+    {
+        if (DIRECTORY_SEPARATOR !== '/') {
+            self::markTestSkipped('Symlink semantics differ on non-Unix filesystems');
+        }
+        // Build a fixture package with a SKILL.md symlink pointing outside it.
+        $packageDir = sys_get_temp_dir() . '/symlink-pkg-' . uniqid();
+        $outsideDir = sys_get_temp_dir() . '/symlink-target-' . uniqid();
+        mkdir($packageDir);
+        mkdir($outsideDir);
+        $secretFile = $outsideDir . '/secret.md';
+        file_put_contents($secretFile, "---\nname: stolen-secret\ndescription: whatever\n---\n");
+        symlink($secretFile, $packageDir . '/SKILL.md');
+
+        try {
+            $provider = new class ($packageDir) implements PackageProvider {
+                public function __construct(private string $path)
+                {
+                }
+
+                public function iterAllPackages(): iterable
+                {
+                    yield new PackageInfo('evil/pkg', $this->path, '1.0.0', 'library', ['ai-agent-skill' => 'SKILL.md']);
+                }
+            };
+
+            $discovery = new SkillDiscovery($this->io, $provider);
+            $skills = $discovery->discoverAllSkills();
+
+            self::assertSame([], $skills, 'Symlink escaping the package directory must be rejected');
+        } finally {
+            @unlink($packageDir . '/SKILL.md');
+            @rmdir($packageDir);
+            @unlink($secretFile);
+            @rmdir($outsideDir);
+        }
+    }
+
     public function testRejectPathTraversal(): void
     {
         // SECURITY: relative paths with .. segments must be rejected so a

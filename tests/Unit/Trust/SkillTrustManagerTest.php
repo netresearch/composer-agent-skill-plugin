@@ -468,6 +468,35 @@ final class SkillTrustManagerTest extends TestCase
         self::assertFalse($mgr->hasDecision('any/pkg'));
     }
 
+    public function testFirstRunMalformedAnswerDefaultsToNone(): void
+    {
+        // A bogus answer like 'yes' (instead of y/n/a/d) must default to None,
+        // not be parsed as something more permissive. Pinning this so future
+        // 'helpful' parsing doesn't accidentally widen trust.
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn('yes');
+
+        $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
+        $mgr->applyFirstRunPolicy($this->firstRunInput([['vendor/foo', true]]));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertSame([], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testRevokeUnknownPackageReturnsFalse(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/known' => true]]],
+        ]));
+        $mgr = SkillTrustManager::forComposerJson(new BufferIO(), $this->composerJsonPath);
+
+        self::assertFalse($mgr->revoke('vendor/unknown'));
+        // Existing entry untouched
+        self::assertTrue($mgr->isAllowed('vendor/known'));
+    }
+
     public function testFirstRunWithNoLegacyPackagesDoesNothing(): void
     {
         file_put_contents($this->composerJsonPath, "{\n}\n");
