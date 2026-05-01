@@ -10,12 +10,15 @@ use Netresearch\ComposerAgentSkillPlugin\Commands\ListSkillsCommand;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
+use Netresearch\ComposerAgentSkillPlugin\Tests\Support\RegistersConsoleCommands;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class ListSkillsCommandTest extends TestCase
 {
+    use RegistersConsoleCommands;
+
     private string $rootDir;
 
     protected function setUp(): void
@@ -62,7 +65,7 @@ final class ListSkillsCommandTest extends TestCase
 
         $command = new ListSkillsCommand($discovery);
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
         $tester->execute([]);
 
@@ -96,7 +99,7 @@ final class ListSkillsCommandTest extends TestCase
 
         $command = new ListSkillsCommand($discovery);
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
         $tester->execute([]);
         $output = $tester->getDisplay();

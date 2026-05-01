@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > for the rationale.
 
 ### Added
+- **PHP 8.5 and Symfony 8.0 support** in the test matrix and Composer constraints (`symfony/yaml`, `symfony/console`).
+- **Symfony 7.4 LTS** added to the test matrix (replacing 7.2, which no longer receives security updates).
+- **Composer host matrix** — every PHP × Symfony combination is now tested against both Composer 2.2 LTS and 2.9 (the only supported Composer 2.x release lines).
+- **Lowest declared dependency** validation — one extra row resolves with `--prefer-lowest --prefer-stable` against Composer 2.2 LTS, ensuring documented minimums actually install and pass tests.
 - **Universal skill discovery**: any Composer package can now ship skills via `extra.ai-agent-skill`, regardless of its declared `type`. Closes [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42).
 - **Trust prompt**: first-time discovery from a new package prompts the user (`y`/`n`/`a`/`d`) before registering its skills. Decisions persist in root `composer.json` under `extra.ai-agent-skill.allow-skills` with glob support, mirroring Composer's `config.allow-plugins`.
 - **First-run policy prompt** for legacy `type: ai-agent-skill` packages: `[n] None / [d] Direct deps only / [a] All`, default `n` (strict). Non-interactive mode defaults to `n` with a per-package `composer skills:trust ...` recovery hint, so CI never silently auto-trusts dependencies. Replaces the earlier prototype's "auto-seed everything" behavior flagged HIGH by the security review.
@@ -33,7 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `composer read-skill` now shows trust state in the header and warns when reading content from a pending or denied skill (which is not registered in `AGENTS.md`).
 - `SkillTrustManager`, `PackageProvider`, `InstalledVersionsProvider`, `PackageInfo`, and `TrustDecision` abstractions for testability.
 
+### Fixed
+- **Composer 2.2 LTS compatibility** — `CommandContextTrait` now falls back to the legacy `getComposer(false)` API on Composer 2.2; `tryComposer()` was only introduced in Composer 2.3. Detected by the new `--prefer-lowest` matrix row.
+
 ### Changed
+- `composer-plugin-api` constraint changed from `^2.1` to `2.2.*|^2.9` — matches the only Composer release lines we test and the only ones that receive upstream support. Composer 2.0/2.1 are out of support; 2.3–2.8 are no longer maintained either.
+- `composer/composer` (require-dev) constraint changed from `^2.1` to `2.2.*|^2.9` for the same reason.
 - `SkillDiscovery` no longer filters by package `type`. Legacy `type: ai-agent-skill` packages with a root `SKILL.md` continue to work unchanged.
 - `SkillDiscovery::discoverAllSkills()` is now pure — it enumerates every declared skill with a `trust_state` field but never prompts. Gating happens at the install/update boundary in `SkillPlugin::updateAgentsMd()` only.
 - Non-interactive `composer install` now skips untrusted skill packages with a `composer config --json` hint instead of registering them silently.

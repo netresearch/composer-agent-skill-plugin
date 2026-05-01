@@ -12,8 +12,9 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
  * through to the cwd path; production paths use Composer's ConfigSource so
  * they honor `--working-dir`.
  *
- * Mixed into commands that extend {@see \Composer\Command\BaseCommand}, which
- * exposes the `tryComposer()` lookup we depend on.
+ * Mixed into commands that extend {@see \Composer\Command\BaseCommand}.
+ * `tryComposer()` was added in Composer 2.3; on 2.2 LTS we fall back to
+ * the legacy `getComposer(false)` (still present, deprecated since 2.3).
  *
  * @phpstan-require-extends \Composer\Command\BaseCommand
  */
@@ -26,7 +27,15 @@ trait CommandContextTrait
      */
     private function resolveContext(): array
     {
-        $composer = $this->tryComposer();
+        // tryComposer() was introduced in Composer 2.3; 2.2 LTS only has
+        // the deprecated getComposer(). Resolve in a way that works on both.
+        /** @phpstan-ignore-next-line function.alreadyNarrowedType */
+        if (method_exists($this, 'tryComposer')) {
+            $composer = $this->tryComposer();
+        } else {
+            /** @phpstan-ignore-next-line method.deprecated */
+            $composer = $this->getComposer(false);
+        }
         if ($composer !== null) {
             return [
                 $composer->getConfig()->getConfigSource()->getName(),

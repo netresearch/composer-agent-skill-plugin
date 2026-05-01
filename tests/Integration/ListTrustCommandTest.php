@@ -6,11 +6,14 @@ namespace Netresearch\ComposerAgentSkillPlugin\Tests\Integration;
 
 use Composer\Console\Application;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ListTrustCommand;
+use Netresearch\ComposerAgentSkillPlugin\Tests\Support\RegistersConsoleCommands;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class ListTrustCommandTest extends TestCase
 {
+    use RegistersConsoleCommands;
+
     private string $rootDir;
     private string $cwdBackup;
 
@@ -44,7 +47,7 @@ final class ListTrustCommandTest extends TestCase
         file_put_contents($this->rootDir . '/composer.json', "{\n}\n");
 
         $command = new ListTrustCommand();
-        (new Application())->add($command);
+        self::registerCommand(new Application(), $command);
         $tester = new CommandTester($command);
         $tester->execute([]);
 
@@ -63,7 +66,7 @@ final class ListTrustCommandTest extends TestCase
         ], JSON_PRETTY_PRINT));
 
         $command = new ListTrustCommand();
-        (new Application())->add($command);
+        self::registerCommand(new Application(), $command);
         $tester = new CommandTester($command);
         $tester->execute([]);
 

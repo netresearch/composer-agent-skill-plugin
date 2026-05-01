@@ -3,24 +3,11 @@
 A Composer plugin that enables universal AI agent skill distribution and management for PHP projects. Automatically discovers, registers, and manages AI agent skills from Composer packages, providing a standardized way for the PHP ecosystem to share agent capabilities.
 
 [![CI](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-31%20passing-success)](tests/)
-[![PHPStan](https://img.shields.io/badge/PHPStan-level%208-success)](phpstan.neon)
-[![PHP Version](https://img.shields.io/badge/php-%5E8.2-blue)](composer.json)
-[![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.x%20%7C%207.x-blue)](composer.json)
+[![Tests](https://img.shields.io/badge/tests-127%20passing-success)](tests/)
+[![PHPStan](https://img.shields.io/badge/PHPStan-level%2010%20(max)-success)](phpstan.neon)
+[![PHP Version](https://img.shields.io/badge/php-%5E8.4-blue)](composer.json)
+[![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.4%20%7C%207.4%20%7C%208.0-blue)](composer.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-## 🔌 Compatibility
-
-This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
-
-**Supported Platforms:**
-- ✅ Claude Code (Anthropic)
-- ✅ Cursor
-- ✅ GitHub Copilot
-- ✅ Other skills-compatible AI agents
-
-> Skills are portable packages of procedural knowledge that work across any AI agent supporting the Agent Skills specification.
-
 
 ## Features
 
