@@ -67,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Actions hardening** ([#31](https://github.com/netresearch/composer-agent-skill-plugin/pull/31)): SHA-pin all third-party actions and add Dependabot for the `github-actions` ecosystem so action updates ship as reviewable PRs rather than floating tags.
 
 ### Changed
-- Dependency updates via Renovate: `step-security/harden-runner` v2.15.0–v2.16.0, `shivammathur/setup-php` digest refresh, `codecov/codecov-action` digest refresh.
+- Dependency updates via Renovate: `step-security/harden-runner` v2.15.0–2.16.0, `shivammathur/setup-php` digest refresh, `codecov/codecov-action` digest refresh.
 
 ## [1.1.3] - 2026-02-09
 
@@ -159,7 +159,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Path Traversal Protection**: Uses `realpath()` to resolve canonical paths
 - **XML Escaping**: Properly escapes skill metadata in generated XML
 
-[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.5...v2.0.0
+[1.1.5]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.4...v1.1.5
+[1.1.4]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.3...v1.1.4
+[1.1.3]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.0.0...v1.1.0
