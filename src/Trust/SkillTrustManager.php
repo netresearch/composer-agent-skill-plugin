@@ -22,11 +22,15 @@ final class SkillTrustManager
     public function __construct(
         private readonly IOInterface $io,
         private readonly string $rootDir,
+        private readonly ?string $rootPackageName = null,
     ) {
     }
 
     public function hasDecision(string $packageName): bool
     {
+        if ($packageName === $this->rootPackageName) {
+            return true; // root project is implicitly self-trusted
+        }
         if (isset($this->sessionRules[$packageName])) {
             return true;
         }
@@ -35,6 +39,9 @@ final class SkillTrustManager
 
     public function isAllowed(string $packageName): bool
     {
+        if ($packageName === $this->rootPackageName) {
+            return true;
+        }
         if (isset($this->sessionRules[$packageName])) {
             return $this->sessionRules[$packageName];
         }

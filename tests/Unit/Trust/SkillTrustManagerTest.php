@@ -246,6 +246,25 @@ final class SkillTrustManagerTest extends TestCase
         self::assertSame($original, file_get_contents($this->composerJsonPath));
     }
 
+    public function testRootPackageIsAlwaysAllowed(): void
+    {
+        // The user IS the root — never prompt for self-authorization.
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir, 'my-org/my-project');
+
+        self::assertTrue($mgr->hasDecision('my-org/my-project'));
+        self::assertTrue($mgr->isAllowed('my-org/my-project'));
+        // decide() returns true without writing anything to composer.json (file is missing).
+        self::assertTrue($mgr->decide('my-org/my-project'));
+        self::assertFileDoesNotExist($this->composerJsonPath);
+    }
+
+    public function testRootPackageNullByDefault(): void
+    {
+        // Backward compat: existing constructor signature without root name is unchanged.
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        self::assertFalse($mgr->hasDecision('any/pkg'));
+    }
+
     public function testSeedIfAbsentWithNoLegacyPackagesDoesNothing(): void
     {
         file_put_contents($this->composerJsonPath, "{\n}\n");

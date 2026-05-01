@@ -97,7 +97,12 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             }
 
             $provider = new \Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider();
-            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager($this->io, $projectRoot);
+            $rootPackageName = $event->getComposer()->getPackage()->getName();
+            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+                $this->io,
+                $projectRoot,
+                $rootPackageName,
+            );
 
             // Auto-seed: existing type: ai-agent-skill packages are implicitly trusted
             // on first run. The user already chose to `composer require` them, so
