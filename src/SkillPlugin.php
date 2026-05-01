@@ -68,7 +68,14 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     /**
      * Get subscribed events.
      *
-     * Registers event handlers for post-install and post-update commands.
+     * Hooks into install and update; both fire `composer require` indirectly
+     * (it runs an update internally). `composer create-project` covers itself
+     * because it dispatches POST_INSTALL_CMD before its own POST_CREATE_PROJECT_CMD.
+     *
+     * Deliberately NOT subscribing to POST_AUTOLOAD_DUMP — `composer dump-autoload`
+     * is invoked when developers regenerate autoload files, but vendored skills
+     * are not normally edited in place. Subscribing would re-scan the package
+     * tree on every dump for no behavioral gain.
      *
      * @return array<string, string|array<int, string|int>>
      */
@@ -81,45 +88,90 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     }
 
     /**
-     * Update AGENTS.md with discovered skills.
+     * Update AGENTS.md with discovered (and trusted) skills.
      *
-     * Called automatically after composer install/update.
+     * Called automatically after composer install/update. This is the only
+     * place where SkillTrustManager::decide() may prompt the user — pure
+     * discovery (used by `composer list-skills`) never triggers prompts.
      */
     public function updateAgentsMd(Event $event): void
     {
         try {
-            // Discover all skills from installed packages
-            $discovery = new SkillDiscovery($this->io);
-            $skills = $discovery->discoverAllSkills();
+            $composer = $event->getComposer();
+            // Composer's ConfigSource::getName() returns the absolute composer.json
+            // path. This is the right source — getcwd() breaks under
+            // `composer --working-dir=…`, daemon contexts, and in tests where
+            // the working directory drifts.
+            $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
+            $projectRoot = dirname($composerJsonPath);
 
-            // Generate and update AGENTS.md
-            $generator = new AgentsMdGenerator();
-            $projectRoot = getcwd();
-            if ($projectRoot === false) {
-                throw new \RuntimeException('Could not determine project root directory.');
-            }
-
-            $agentsMdPath = $projectRoot . DIRECTORY_SEPARATOR . 'AGENTS.md';
-            $generator->updateAgentsMd($agentsMdPath, $skills);
-
-            // Output success message
-            $skillCount = count($skills);
-            if ($skillCount > 0) {
-                $this->io->write(
-                    sprintf(
-                        '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
-                        $skillCount,
-                        $skillCount === 1 ? '' : 's'
-                    )
-                );
-            }
-        } catch (\Exception $e) {
-            $this->io->writeError(
-                sprintf(
-                    '<error>AI Agent Skill Plugin error: %s</error>',
-                    $e->getMessage()
-                )
+            $provider = new \Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider();
+            $rootPackageName = $composer->getPackage()->getName();
+            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(
+                $this->io,
+                $composerJsonPath,
+                $rootPackageName,
             );
+
+            // First-run policy: when the trust map is missing AND there are legacy
+            // type:ai-agent-skill packages, ask the user once how to seed
+            // (none/direct/all). Defaults to 'none' (strict) — including in
+            // non-interactive mode, which also emits a recovery hint per package.
+            $rootRequires = $composer->getPackage()->getRequires();
+            $rootDevRequires = $composer->getPackage()->getDevRequires();
+            $directNames = array_merge(array_keys($rootRequires), array_keys($rootDevRequires));
+            $firstRunInput = \Netresearch\ComposerAgentSkillPlugin\Trust\FirstRunInput::buildForFirstRun(
+                $provider,
+                $directNames,
+            );
+            $trust->applyFirstRunPolicy($firstRunInput);
+
+            $discovery = new SkillDiscovery($this->io, $provider, $trust);
+            $allSkills = $discovery->discoverAllSkills();
+
+            $gate = new SkillGate($trust);
+            $result = $gate->gate($allSkills);
+
+            $generator = new AgentsMdGenerator();
+            $agentsMdPath = $projectRoot . DIRECTORY_SEPARATOR . 'AGENTS.md';
+            $generator->updateAgentsMd($agentsMdPath, $result->allowed);
+
+            $skillCount = count($result->allowed);
+            if ($skillCount > 0) {
+                $this->io->write(sprintf(
+                    '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
+                    $skillCount,
+                    $skillCount === 1 ? '' : 's'
+                ));
+            }
+            if (count($result->denied) > 0) {
+                $this->io->write(sprintf(
+                    '<comment>%d package%s not registered (trust denied).</comment>',
+                    count($result->denied),
+                    count($result->denied) === 1 ? '' : 's'
+                ));
+            }
+            if (count($result->pending) > 0) {
+                $this->io->write(sprintf(
+                    '<comment>%d package%s not registered (trust pending). Run composer install interactively to be prompted.</comment>',
+                    count($result->pending),
+                    count($result->pending) === 1 ? '' : 's'
+                ));
+            }
+        } catch (\Throwable $e) {
+            // Catch \Throwable (not \Exception) so PHP 8 \Error subclasses
+            // like \ValueError (e.g. NUL byte in a path arg) don't bubble out
+            // and abort the entire composer install. The plugin's failure
+            // should never block dependency installation.
+            $this->io->writeError(sprintf(
+                '<error>AI Agent Skill Plugin error: %s</error>',
+                $e->getMessage()
+            ));
+            // Full stack trace under -v / -vv / -vvv so debugging doesn't
+            // require rebuilding the failure scenario.
+            if ($this->io->isVerbose()) {
+                $this->io->writeError((string) $e);
+            }
         }
     }
 }

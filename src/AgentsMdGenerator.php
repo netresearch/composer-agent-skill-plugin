@@ -94,8 +94,9 @@ final class AgentsMdGenerator
             $content = $skillsXml . "\n";
         }
 
-        // Atomic write: write to temp file then rename
-        $tempPath = $agentsMdPath . '.tmp';
+        // Atomic write: write to temp file then rename. Use a randomized suffix
+        // so two parallel writers don't collide on the same temp filename.
+        $tempPath = $agentsMdPath . '.skill-agents.' . bin2hex(random_bytes(8));
         if (file_put_contents($tempPath, $content) === false) {
             throw new \RuntimeException(sprintf('Failed to write temporary file: %s', $tempPath));
         }

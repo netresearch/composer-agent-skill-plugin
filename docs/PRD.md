@@ -850,11 +850,57 @@ See docs/architecture.md for system design details.
 
 ---
 
+## Addendum: Universal Discovery & Trust (v0.2.0)
+
+Originally the plugin required packages to declare `type: ai-agent-skill`. Issue [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42) showed this is too restrictive — a library's `type` is already taken by its primary identity (`library`, `symfony-bundle`, `typo3-cms-extension`, etc.), and forcing maintainers to ship a separate companion package for every library that wants to bundle a skill doubles the maintenance surface.
+
+### Discovery change
+
+Discovery now iterates **all** installed packages and selects those that either:
+
+1. Declare `extra.ai-agent-skill` (the new primary path; mirrors `phpstan/extension-installer`'s `extra.phpstan.includes`), **or**
+2. Carry the legacy `type: ai-agent-skill` (preserved for existing pure-skill packages).
+
+`SkillDiscovery::discoverAllSkills()` is now pure: it never prompts, never mutates state. Each returned skill carries a `trust_state` field (`allowed` / `denied` / `pending`) populated by reading the trust manager. This lets `composer list-skills` surface a complete inventory without firing trust prompts.
+
+### Trust change
+
+Broadening discovery means any transitive dependency could potentially register skills. To keep the security story intact, the plugin requires per-package opt-in before reading SKILL.md content for inclusion in `AGENTS.md` — the same shape Composer uses for `allow-plugins`:
+
+- **Interactive mode**: `[y,n,a,d,?]` prompt; `y`/`n` persist to `composer.json`, `a` is session-only, `d` leaves undecided (re-prompts next run), `?` shows per-option help and re-prompts. The prompt embeds an inline `composer skills:trust …` recovery hint.
+- **Non-interactive mode**: skip with a `composer skills:trust <package>` hint (gentler than Composer's hard-fail; CI stays deterministic).
+- **Persistence**: `extra.ai-agent-skill.allow-skills` in the root `composer.json`. Atomic write via temp file + rename, with a sidecar `flock` file for cross-process safety. Glob patterns (`vendor/*`) supported via a case-sensitive matcher (Composer's `BasePackage::packageNameToRegexp()` always sets `/i`, which we deliberately don't use).
+- **Boundary**: only `SkillPlugin::updateAgentsMd()` — the install/update event handler — invokes `SkillTrustManager::decide()`. Discovery and reporting never prompt.
+
+### First-run policy (replaces auto-seeding)
+
+When `extra.ai-agent-skill.allow-skills` is absent and the project has installed `type: ai-agent-skill` packages, a one-time prompt asks how to seed:
+
+- `[n] None` (default, strict) — every package goes through the per-package prompt.
+- `[d] Direct dependencies only` — auto-trust packages your root `composer.json` directly requires; transitives still prompt.
+- `[a] All` — auto-trust every existing skill package. Restores the v0.1.x behaviour at the user's explicit consent.
+
+Non-interactive mode defaults to `[n]` and emits a `composer skills:trust …` recovery hint per affected package, marked `(in your require)` or `(pulled in by another package)`. The map is always written (possibly empty) so this prompt fires at most once per project.
+
+The earlier prototype's blanket auto-seeding was replaced after the security review flagged it HIGH: a transitive dependency the user never knowingly chose got trust by default. Deny-by-default closes that vector while still allowing a single keystroke (`a`) to keep v0.1.x behaviour for users who want it.
+
+### Commands
+
+The plugin registers four Composer commands:
+
+| Command | Purpose | Mutates? |
+|---|---|---|
+| `composer list-skills` | List every discovered skill with trust state | No |
+| `composer read-skill <name>` | Print full SKILL.md content for one skill | No |
+| `composer skills:trust <package> [--deny\|--revoke]` | Persist a trust decision without prompting | Yes |
+| `composer skills:list-trust` | Show every persisted decision in the allow-skills map | No |
+
 ## Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0.0 | 2025-11-24 | Paul Siedler | Initial PRD from brainstorming session |
+| 1.1.0 | 2026-05-01 | Sebastian Mendel | Universal discovery & trust addendum (issue [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42)) |
 
 ---
 

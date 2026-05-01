@@ -4,35 +4,52 @@ declare(strict_types=1);
 
 namespace Netresearch\ComposerAgentSkillPlugin;
 
-use Composer\InstalledVersions;
 use Composer\IO\IOInterface;
+use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
+use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
  * Discovers AI agent skills from installed Composer packages.
  *
- * Scans all packages with type "ai-agent-skill", reads their SKILL.md files,
- * validates frontmatter, and returns skill metadata for registration.
+ * Iterates all installed packages and selects those that declare skills
+ * (either via extra.ai-agent-skill or the legacy type: ai-agent-skill).
  */
 final class SkillDiscovery
 {
-    private const TYPE_AI_AGENT_SKILL = 'ai-agent-skill';
     private const DEFAULT_SKILL_FILE = 'SKILL.md';
     private const EXTRA_KEY = 'ai-agent-skill';
 
     /** @var array<int, string> */
     private array $warnings = [];
 
+    private readonly PackageProvider $packages;
+
     public function __construct(
-        private readonly IOInterface $io
+        private readonly IOInterface $io,
+        ?PackageProvider $packages = null,
+        private readonly ?SkillTrustManager $trust = null,
     ) {
+        // Default to the InstalledVersions-backed provider so production
+        // callers don't have to wire one explicitly. The legacy iterByType()
+        // fallback (which read packages by type from InstalledVersions and
+        // returned them with empty extra) is gone — it was only reachable in
+        // tests after every command was wired with a provider.
+        $this->packages = $packages ?? new InstalledVersionsProvider();
     }
 
     /**
      * Discover all skills from installed packages.
      *
-     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string}>
+     * Pure: never prompts, never mutates state. Each returned skill carries
+     * a trust_state field (allowed / denied / pending) populated by reading
+     * the trust manager — but no prompt is fired. Gating happens at the
+     * install/update boundary in SkillPlugin::updateAgentsMd().
+     *
+     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
      */
     public function discoverAllSkills(): array
     {
@@ -40,35 +57,33 @@ final class SkillDiscovery
         $skills = [];
         $skillNames = [];
 
-        $packageNames = InstalledVersions::getInstalledPackagesByType(self::TYPE_AI_AGENT_SKILL);
-
-        foreach ($packageNames as $packageName) {
-            $installPath = InstalledVersions::getInstallPath($packageName);
-            $version = InstalledVersions::getPrettyVersion($packageName);
-
-            if ($installPath === null || $version === null) {
+        foreach ($this->packages->iterAllPackages() as $pkg) {
+            if (!$pkg->declaresSkills()) {
                 continue;
             }
 
-            $packageSkills = $this->discoverSkillsFromPackage($packageName, $installPath, $version);
+            $packageSkills = $this->discoverSkillsFromPackage($pkg->name, $pkg->installPath, $pkg->version);
+            $trustState = $this->resolveTrustState($pkg->name);
 
             foreach ($packageSkills as $skill) {
+                $skill['trust_state'] = $trustState;
+
                 // Handle duplicate skill names (last wins + warning)
                 if (isset($skillNames[$skill['name']])) {
                     $previousPackage = $skillNames[$skill['name']];
                     $this->addWarning(
-                        $packageName,
+                        $pkg->name,
                         sprintf(
                             "Duplicate skill name '%s' found. Previously defined in %s.\n" .
                             "                   Using skill from %s (last one wins).",
                             $skill['name'],
                             $previousPackage,
-                            $packageName
+                            $pkg->name
                         )
                     );
                 }
 
-                $skillNames[$skill['name']] = $packageName;
+                $skillNames[$skill['name']] = $pkg->name;
                 $skills[$skill['name']] = $skill;
             }
         }
@@ -80,6 +95,17 @@ final class SkillDiscovery
         return array_values($skills);
     }
 
+    private function resolveTrustState(string $packageName): TrustState
+    {
+        if ($this->trust === null) {
+            return TrustState::Allowed; // legacy callers without a trust manager get the old behavior
+        }
+        if (!$this->trust->hasDecision($packageName)) {
+            return TrustState::Pending;
+        }
+        return $this->trust->isAllowed($packageName) ? TrustState::Allowed : TrustState::Denied;
+    }
+
     /**
      * Discover skills from a single package.
      *
@@ -89,6 +115,8 @@ final class SkillDiscovery
     {
         $skills = [];
         $skillPaths = $this->resolveSkillPaths($packageName, $installPath);
+
+        $packageRealPath = realpath($installPath);
 
         foreach ($skillPaths as $relativePath) {
             $absolutePath = $installPath . DIRECTORY_SEPARATOR . $relativePath;
@@ -103,6 +131,34 @@ final class SkillDiscovery
                         $relativePath === self::DEFAULT_SKILL_FILE
                             ? 'Expected SKILL.md in package root (convention).'
                             : "Check 'extra.ai-agent-skill' configuration in composer.json."
+                    )
+                );
+                continue;
+            }
+
+            // Defense-in-depth: even after rejecting '..' segments, a symlink inside
+            // the package could point outside it. Verify the resolved file is rooted
+            // at the resolved package directory. Fail CLOSED — if either realpath()
+            // returns false (broken symlink, open_basedir, permission denied),
+            // we skip rather than allow an unverified path through.
+            $resolvedFile = realpath($absolutePath);
+            if ($packageRealPath === false || $resolvedFile === false) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Skill path '%s' could not be resolved for safety check (broken symlink or restricted filesystem). Skipping.",
+                        $relativePath
+                    )
+                );
+                continue;
+            }
+            $boundary = $packageRealPath . DIRECTORY_SEPARATOR;
+            if (!str_starts_with($resolvedFile . DIRECTORY_SEPARATOR, $boundary)) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Skill path '%s' resolves outside the package directory (symlink escape).",
+                        $relativePath
                     )
                 );
                 continue;
@@ -143,7 +199,7 @@ final class SkillDiscovery
         }
 
         $extra = $composerData['extra'] ?? [];
-        if (!isset($extra[self::EXTRA_KEY])) {
+        if (!is_array($extra) || !isset($extra[self::EXTRA_KEY])) {
             return [self::DEFAULT_SKILL_FILE];
         }
 
@@ -156,6 +212,17 @@ final class SkillDiscovery
                     $packageName,
                     "Absolute paths not allowed in 'extra.ai-agent-skill'.\n" .
                     "                   Use relative paths from package root."
+                );
+                return [];
+            }
+            if ($this->isUnsafeRelativePath($config)) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Path traversal '..' rejected in 'extra.ai-agent-skill': '%s'.\n" .
+                        "                   Skill paths must stay within the package directory.",
+                        $config
+                    )
                 );
                 return [];
             }
@@ -180,6 +247,17 @@ final class SkillDiscovery
                     );
                     continue;
                 }
+                if ($this->isUnsafeRelativePath($path)) {
+                    $this->addWarning(
+                        $packageName,
+                        sprintf(
+                            "Path traversal '..' rejected in 'extra.ai-agent-skill': '%s'.\n" .
+                            "                   Skill paths must stay within the package directory.",
+                            $path
+                        )
+                    );
+                    continue;
+                }
                 $paths[] = $path;
             }
             return $paths;
@@ -197,6 +275,27 @@ final class SkillDiscovery
         // Windows absolute path matches C:\ or similar
         return str_starts_with($path, '/') ||
                (strlen($path) > 1 && $path[1] === ':');
+    }
+
+    /**
+     * Check if a relative path contains traversal segments (..).
+     *
+     * Reject any path where any segment (split by / or \) is exactly "..".
+     * This blocks both leading "../foo" and embedded "subdir/../escape" forms.
+     * "foo..bar" inside a filename component is safe and not flagged.
+     */
+    private function isUnsafeRelativePath(string $path): bool
+    {
+        $segments = preg_split('#[/\\\\]+#', $path);
+        if ($segments === false) {
+            return true;
+        }
+        foreach ($segments as $segment) {
+            if ($segment === '..') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -245,7 +344,16 @@ final class SkillDiscovery
             return null;
         }
 
-        $validation = $this->validateFrontmatter($frontmatter);
+        // Narrow to <string, mixed> shape — non-string keys would already fail validation
+        // but PHPStan needs the explicit narrowing to call validateFrontmatter().
+        $stringKeyed = [];
+        foreach ($frontmatter as $key => $value) {
+            if (is_string($key)) {
+                $stringKeyed[$key] = $value;
+            }
+        }
+
+        $validation = $this->validateFrontmatter($stringKeyed);
         if ($validation !== null) {
             $this->addWarning(
                 $packageName,
@@ -254,9 +362,16 @@ final class SkillDiscovery
             return null;
         }
 
+        // validateFrontmatter() already verified name and description are non-empty strings.
+        $name = $stringKeyed['name'];
+        $description = $stringKeyed['description'];
+        if (!is_string($name) || !is_string($description)) {
+            return null; // unreachable after validateFrontmatter, but PHPStan needs the narrow
+        }
+
         return [
-            'name' => $frontmatter['name'],
-            'description' => $frontmatter['description'],
+            'name' => $name,
+            'description' => $description,
         ];
     }
 
@@ -296,6 +411,26 @@ final class SkillDiscovery
         // Validate description length
         if (strlen($description) > 1024) {
             return sprintf("Description exceeds maximum length of 1024 characters (%d chars).", strlen($description));
+        }
+
+        // SECURITY: reject control characters and bidi overrides in the description.
+        // The description is rendered into AGENTS.md inside <description>...</description>
+        // tags via htmlspecialchars(ENT_XML1|ENT_QUOTES) — but htmlspecialchars does NOT
+        // strip newlines or control chars. A description containing "\n</description>\n
+        // <skill><name>evil</name>" would forge a second skill entry that an AI agent
+        // reads as legitimate. Plus U+202E and friends produce visually misleading
+        // strings that look one way but are read another by the agent.
+        //
+        // We reject the *entire* C0 range 0x00-0x1F plus DEL 0x7F. That includes
+        // tab (0x09), LF (0x0A), and CR (0x0D) — the most dangerous attack vectors,
+        // since they break out of the single-line containment that AGENTS.md
+        // assumes. Descriptions are meant to be short single-paragraph blurbs,
+        // so disallowing all whitespace-control codepoints is the conservative choice.
+        // Also reject the bidi override range U+202A-U+202E and U+2066-U+2069.
+        if (preg_match('/[\x00-\x1F\x7F]/u', $description) === 1
+            || preg_match('/\x{202A}|\x{202B}|\x{202C}|\x{202D}|\x{202E}|\x{2066}|\x{2067}|\x{2068}|\x{2069}/u', $description) === 1
+        ) {
+            return 'Description contains control characters or bidi-override codepoints.';
         }
 
         return null;

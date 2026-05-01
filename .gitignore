@@ -25,3 +25,8 @@ Thumbs.db
 
 # Testing
 /coverage/
+
+# Agent / MCP tool metadata (per-developer, not project content)
+.serena/
+.claude/
+claudedocs/

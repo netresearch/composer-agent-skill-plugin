@@ -1,0 +1,11 @@
+{
+    "name": "test/library-with-skill",
+    "description": "Test fixture: a regular library that ships a skill",
+    "type": "library",
+    "require": {
+        "php": "^8.2"
+    },
+    "extra": {
+        "ai-agent-skill": "SKILL.md"
+    }
+}

@@ -71,12 +71,13 @@ Install any package with type `ai-agent-skill`:
 composer require vendor/database-analyzer-skill
 ```
 
-### 2. Skills Auto-Register
+### 2. Skills Auto-Register (after trust)
 
 The plugin automatically:
 - Discovers skill packages during `composer install` or `composer update`
-- Generates/updates `AGENTS.md` in your project root
-- Registers skills in XML format for AI agent consumption
+- **Asks once** before registering skills from a package it hasn't seen before — see [Trust Model](#trust-model)
+- Generates/updates `AGENTS.md` in your project root with the trusted skills
+- Registers them in XML format for AI agent consumption
 
 ### 3. Use Skills
 
@@ -90,6 +91,84 @@ composer list-skills
 composer read-skill database-analyzer
 ```
 
+> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, and more.
+
+## Trust Model
+
+Skills are instructions an AI agent will follow in your project. To prevent transitive dependencies from silently injecting skills, the plugin asks before registering skills from a new package — modeled on Composer's own `allow-plugins` flow.
+
+The first time a new package wants to register skills, you'll see:
+
+```
+Package "vendor/foo" wants to register AI agent skills.
+Skills are instructions an AI agent will follow in your project.
+Allow this package to register skills?
+  [y] Yes — allow & persist (writes to composer.json)
+  [n] No — deny & persist (suppress future prompts)
+  [a] Allow for this session only
+  [d] Discard — leave undecided, ask again next run
+  [?] Show details about this choice
+(change later with: composer skills:trust vendor/foo [--deny|--revoke])
+(defaults to n) [y,n,a,d,?]:
+```
+
+Decisions persist under `extra.ai-agent-skill.allow-skills` in your root `composer.json`:
+
+```json
+{
+  "extra": {
+    "ai-agent-skill": {
+      "allow-skills": {
+        "vendor/foo": true,
+        "vendor/bar": false,
+        "trusted-org/*": true
+      }
+    }
+  }
+}
+```
+
+### Managing trust decisions
+
+Use the dedicated commands (preferred):
+
+```bash
+composer skills:trust vendor/foo            # allow & persist
+composer skills:trust vendor/foo --deny     # deny & persist
+composer skills:trust vendor/foo --revoke   # remove from the map (re-prompts next install)
+composer skills:list-trust                  # show every persisted decision
+```
+
+Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
+
+> ⚠️ **Glob matching is case-sensitive and `*` matches any characters within a pattern segment.** Composer normalizes published package names to lowercase, so write trust patterns in lowercase. A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. Exact-string keys always override matching globs, even when the glob was added first. Prefer explicit per-package entries when in doubt.
+
+In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
+
+### First-run policy (covers v0.1.x upgrades)
+
+The first time the plugin runs in a project that already has `type: ai-agent-skill` packages installed — typically a fresh install of those packages or an upgrade from v0.1.x where they were silently auto-trusted — you'll see a one-time prompt asking how to seed the trust map:
+
+```
+The AI Agent Skill plugin found 3 existing skill packages that have not been authorized yet.
+  - vendor/skill-a   (in your require)
+  - vendor/skill-b   (pulled in by another package)
+  - vendor/skill-c   (pulled in by another package)
+How should they be trusted on this first run?
+  [n] None — prompt for each package later (default, strict)
+  [d] Direct dependencies only — auto-trust packages your root composer.json explicitly requires
+  [a] All — auto-trust every existing skill package (including transitive)
+(defaults to n) [n,d,a]:
+```
+
+- **`n` (default, recommended)** — nothing is auto-trusted. Each package goes through the per-package prompt during the same install.
+- **`d`** — only packages listed directly in your root `composer.json`'s `require`/`require-dev` are auto-trusted. Transitive skill packages still prompt.
+- **`a`** — every existing skill package is auto-trusted. This restores the v0.1.x behaviour at the user's explicit consent — fastest, widest trust surface.
+
+The choice is persisted under `extra.ai-agent-skill.allow-skills`, so the prompt only fires once. In non-interactive mode (`composer install --no-interaction`, CI) the policy defaults to `n` and a warning lists every affected package with the `composer skills:trust ...` recovery command. CI installs never silently expand trust on your behalf.
+
+Library-bundled skills (`type: library` + `extra.ai-agent-skill`) are **not** part of this first-run policy — they always go through the per-package prompt because the user chose the library for its primary purpose, not to import skills.
+
 ## Usage
 
 ### List Available Skills
@@ -99,11 +178,12 @@ $ composer list-skills
 
 Available AI Agent Skills:
 
-  database-analyzer        vendor/db-skill               1.2.0
-  oro-bundle-helper        vendor/oro-skill              1.0.0
-  symfony-security         vendor/symfony-security       2.1.0
+  database-analyzer        vendor/db-skill               1.2.0       [allowed]
+  oro-bundle-helper        vendor/oro-skill              1.0.0       [allowed]
+  symfony-security         vendor/symfony-security       2.1.0       [pending]
 
 3 skills available. Use 'composer read-skill <name>' for details.
+1 pending — run `composer install` interactively to be prompted.
 ```
 
 ### Read Skill Details
@@ -131,7 +211,27 @@ The **Base Directory** is the directory containing SKILL.md, used as the root fo
 
 ## Creating Skill Packages
 
-### Basic Skill Package
+There are two ways to ship skills, both fully supported:
+
+### Option A: Library bundles a skill (recommended for libraries)
+
+Any package — regardless of `type` — can ship skills by declaring `extra.ai-agent-skill`:
+
+```json
+{
+  "name": "vendor/my-library",
+  "type": "library",
+  "extra": {
+    "ai-agent-skill": "skills/my-helper.md"
+  }
+}
+```
+
+This mirrors the pattern `phpstan/extension-installer` uses for PHPStan extensions: the library opts in via `extra`, no special package type required. Use this when an existing library wants to ship a companion skill alongside its primary purpose.
+
+### Option B: Dedicated skill package
+
+A package whose only purpose is shipping skills can use `type: ai-agent-skill` and place `SKILL.md` in the package root with no extra config:
 
 **1. Create composer.json:**
 

@@ -2,6 +2,8 @@
 
 This is a reference implementation of an AI agent skill package for the Composer AI Agent Skill Plugin.
 
+> **Note:** this example uses `type: ai-agent-skill` — the *dedicated skill package* pattern. Since v0.2.0, any package can ship a skill alongside its primary purpose by adding `extra.ai-agent-skill` to its `composer.json`, regardless of `type`. See the plugin's [README "Creating Skill Packages"](../../README.md#creating-skill-packages) for both patterns. Use this dedicated pattern when the package's only purpose is shipping skills; use the library-bundled pattern when adding a skill to an existing library.
+
 ## Package Structure
 
 ```
@@ -50,7 +52,8 @@ description: What it does and when to use it (max 1024 chars)
 ## How It Works
 
 1. **Installation**: User installs this package via Composer
-2. **Discovery**: Plugin detects `type: ai-agent-skill` during install/update
+2. **Discovery**: Plugin detects `type: ai-agent-skill` (or `extra.ai-agent-skill`) during install/update
+2a. **Trust prompt**: First time a new package's skills appear, the plugin asks the user to allow or deny — see the main README for details
 3. **Registration**: Plugin parses SKILL.md and registers in AGENTS.md
 4. **Usage**: AI agents discover skill via AGENTS.md XML index
 5. **Invocation**: Agents execute `composer read-skill database-analyzer`
@@ -228,7 +231,7 @@ composer read-skill my-skill
 
 **Common Issues:**
 
-1. **Skill not found**: Check `type: ai-agent-skill` in composer.json
+1. **Skill not found**: Check `type: ai-agent-skill` (or `extra.ai-agent-skill`) in composer.json. If the package shows in `composer list-skills` as `[pending]` or `[denied]`, run `composer skills:trust <package>` to allow it.
 2. **Invalid frontmatter**: Validate YAML syntax and required fields
 3. **Wrong name format**: Use only lowercase, numbers, and hyphens
 4. **Description too long**: Keep under 1024 characters

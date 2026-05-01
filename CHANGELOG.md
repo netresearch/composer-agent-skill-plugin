@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+> **First-run trust default changed from "auto-trust everything" to "deny by default".**
+> If you upgrade an existing installation that was implicitly relying on the
+> v0.1.x behaviour where every `type: ai-agent-skill` package was auto-registered
+> in `AGENTS.md`, you will now see a one-time prompt asking how to seed the
+> trust map (`[n] None / [d] Direct deps only / [a] All`). Choose `[a]` to
+> preserve the previous behaviour. Non-interactive runs (CI) default to `[n]`
+> with a `composer skills:trust …` recovery line per affected package.
+>
+> See [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42)
+> and the security review on PR [#43](https://github.com/netresearch/composer-agent-skill-plugin/pull/43)
+> for the rationale.
+
+### Added
+- **Universal skill discovery**: any Composer package can now ship skills via `extra.ai-agent-skill`, regardless of its declared `type`. Closes [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42).
+- **Trust prompt**: first-time discovery from a new package prompts the user (`y`/`n`/`a`/`d`) before registering its skills. Decisions persist in root `composer.json` under `extra.ai-agent-skill.allow-skills` with glob support, mirroring Composer's `config.allow-plugins`.
+- **First-run policy prompt** for legacy `type: ai-agent-skill` packages: `[n] None / [d] Direct deps only / [a] All`, default `n` (strict). Non-interactive mode defaults to `n` with a per-package `composer skills:trust ...` recovery hint, so CI never silently auto-trusts dependencies. Replaces the earlier prototype's "auto-seed everything" behavior flagged HIGH by the security review.
+- **Root package is auto-trusted** — projects that ship their own `SKILL.md` no longer get prompted to authorize themselves.
+- `composer list-skills` now shows trust state (`[allowed]` / `[pending]` / `[denied]`) per skill and a footer count of pending packages. The command is purely informational and never prompts.
+- `composer skills:trust <package>` command — allow (`composer skills:trust vendor/foo`), deny (`--deny`), or revoke (`--revoke`) a trust decision without hand-editing `composer.json`. Used as the recovery path for accidental denies and as the canonical fix for non-interactive failures.
+- `composer skills:list-trust` command — read-only inventory of every persisted decision in `extra.ai-agent-skill.allow-skills`, with `[allowed]` / `[denied]` and `(exact)` / `(glob)` markers per entry. Companion to `skills:trust`; never prompts, never mutates.
+- Trust prompt mirrors Composer's plugin prompt shape (`y`/`n`/`a`/`d`/`?`). The `?` answer shows per-option help and re-prompts. The prompt also includes an inline `composer skills:trust <package>` recovery hint so users have an on-screen breadcrumb if they pick `n` by accident.
+- `composer read-skill` now shows trust state in the header and warns when reading content from a pending or denied skill (which is not registered in `AGENTS.md`).
+- `SkillTrustManager`, `PackageProvider`, `InstalledVersionsProvider`, `PackageInfo`, and `TrustDecision` abstractions for testability.
+
+### Changed
+- `SkillDiscovery` no longer filters by package `type`. Legacy `type: ai-agent-skill` packages with a root `SKILL.md` continue to work unchanged.
+- `SkillDiscovery::discoverAllSkills()` is now pure — it enumerates every declared skill with a `trust_state` field but never prompts. Gating happens at the install/update boundary in `SkillPlugin::updateAgentsMd()` only.
+- Non-interactive `composer install` now skips untrusted skill packages with a `composer config --json` hint instead of registering them silently.
+- PHPStan level bumped from 8 to 10 (max).
+
 ## [1.1.2] - 2025-11-26
 
 ### Fixed
