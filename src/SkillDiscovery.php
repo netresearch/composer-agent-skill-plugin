@@ -43,7 +43,7 @@ final class SkillDiscovery
      * the trust manager — but no prompt is fired. Gating happens at the
      * install/update boundary in SkillPlugin::updateAgentsMd().
      *
-     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
+     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
      */
     public function discoverAllSkills(): array
     {

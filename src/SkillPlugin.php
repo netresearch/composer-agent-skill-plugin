@@ -113,36 +113,14 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $allSkills = $discovery->discoverAllSkills();
 
-            // Gate: prompt only for pending entries; drop denied ones.
-            $allowedSkills = [];
-            $deniedPackages = [];
-            $pendingPackages = [];
-            foreach ($allSkills as $skill) {
-                if ($skill['trust_state'] === TrustState::Allowed) {
-                    $allowedSkills[] = $skill;
-                    continue;
-                }
-                if ($skill['trust_state'] === TrustState::Denied) {
-                    $deniedPackages[$skill['package']] = true;
-                    continue;
-                }
-                // pending — call decide() (the only place that may prompt).
-                // After decide() we re-check the trust state so a freshly persisted
-                // 'n' (deny) gets counted as denied, not pending.
-                if ($trust->decide($skill['package'])) {
-                    $allowedSkills[] = $skill;
-                } elseif ($trust->hasDecision($skill['package']) && !$trust->isAllowed($skill['package'])) {
-                    $deniedPackages[$skill['package']] = true;
-                } else {
-                    $pendingPackages[$skill['package']] = true;
-                }
-            }
+            $gate = new SkillGate($trust);
+            $result = $gate->gate($allSkills);
 
             $generator = new AgentsMdGenerator();
             $agentsMdPath = $projectRoot . DIRECTORY_SEPARATOR . 'AGENTS.md';
-            $generator->updateAgentsMd($agentsMdPath, $allowedSkills);
+            $generator->updateAgentsMd($agentsMdPath, $result->allowed);
 
-            $skillCount = count($allowedSkills);
+            $skillCount = count($result->allowed);
             if ($skillCount > 0) {
                 $this->io->write(sprintf(
                     '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
@@ -150,18 +128,18 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                     $skillCount === 1 ? '' : 's'
                 ));
             }
-            if (count($deniedPackages) > 0) {
+            if (count($result->denied) > 0) {
                 $this->io->write(sprintf(
                     '<comment>%d package%s not registered (trust denied).</comment>',
-                    count($deniedPackages),
-                    count($deniedPackages) === 1 ? '' : 's'
+                    count($result->denied),
+                    count($result->denied) === 1 ? '' : 's'
                 ));
             }
-            if (count($pendingPackages) > 0) {
+            if (count($result->pending) > 0) {
                 $this->io->write(sprintf(
                     '<comment>%d package%s not registered (trust pending). Run composer install interactively to be prompted.</comment>',
-                    count($pendingPackages),
-                    count($pendingPackages) === 1 ? '' : 's'
+                    count($result->pending),
+                    count($result->pending) === 1 ? '' : 's'
                 ));
             }
         } catch (\Exception $e) {
