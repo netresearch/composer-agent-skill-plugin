@@ -90,16 +90,19 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     public function updateAgentsMd(Event $event): void
     {
         try {
-            $projectRoot = getcwd();
-            if ($projectRoot === false) {
-                throw new \RuntimeException('Could not determine project root directory.');
-            }
+            $composer = $event->getComposer();
+            // Composer's ConfigSource::getName() returns the absolute composer.json
+            // path. This is the right source — getcwd() breaks under
+            // `composer --working-dir=…`, daemon contexts, and in tests where
+            // the working directory drifts.
+            $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
+            $projectRoot = dirname($composerJsonPath);
 
             $provider = new \Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider();
-            $rootPackageName = $event->getComposer()->getPackage()->getName();
-            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+            $rootPackageName = $composer->getPackage()->getName();
+            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(
                 $this->io,
-                $projectRoot,
+                $composerJsonPath,
                 $rootPackageName,
             );
 
@@ -107,8 +110,8 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             // type:ai-agent-skill packages, ask the user once how to seed
             // (none/direct/all). Defaults to 'none' (strict) — including in
             // non-interactive mode, which also emits a recovery hint per package.
-            $rootRequires = $event->getComposer()->getPackage()->getRequires();
-            $rootDevRequires = $event->getComposer()->getPackage()->getDevRequires();
+            $rootRequires = $composer->getPackage()->getRequires();
+            $rootDevRequires = $composer->getPackage()->getDevRequires();
             $directNames = array_merge(array_keys($rootRequires), array_keys($rootDevRequires));
             $directSet = array_fill_keys($directNames, true);
 

@@ -52,7 +52,7 @@ final class ListSkillsCommandTest extends TestCase
                 yield from [];
             }
         };
-        $trust = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        $trust = SkillTrustManager::forComposerJson(new BufferIO(), $this->rootDir . '/composer.json');
         $discovery = new SkillDiscovery(new BufferIO(), $provider, $trust);
 
         $command = new ListSkillsCommand($discovery);
@@ -86,7 +86,7 @@ final class ListSkillsCommandTest extends TestCase
             'extra' => ['ai-agent-skill' => ['allow-skills' => ['allowed/lib' => true]]],
         ]));
 
-        $trust = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        $trust = SkillTrustManager::forComposerJson(new BufferIO(), $this->rootDir . '/composer.json');
         $discovery = new SkillDiscovery(new BufferIO(), $provider, $trust);
 
         $command = new ListSkillsCommand($discovery);

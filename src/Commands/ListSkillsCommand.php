@@ -37,11 +37,16 @@ final class ListSkillsCommand extends BaseCommand
 
         $discovery = $this->discovery;
         if ($discovery === null) {
-            $rootDir = getcwd();
-            if ($rootDir === false) {
-                $rootDir = sys_get_temp_dir();
+            $composer = $this->tryComposer();
+            if ($composer !== null) {
+                $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
+                $rootName = $composer->getPackage()->getName();
+            } else {
+                $cwd = getcwd();
+                $composerJsonPath = ($cwd !== false ? $cwd : sys_get_temp_dir()) . DIRECTORY_SEPARATOR . 'composer.json';
+                $rootName = null;
             }
-            $trust = new SkillTrustManager($io, $rootDir);
+            $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
             $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
         }
 

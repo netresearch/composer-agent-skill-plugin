@@ -5,24 +5,38 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Trust;
 
 use Composer\IO\IOInterface;
-use Composer\Json\JsonManipulator;
 
+/**
+ * Trust policy for skill packages.
+ *
+ * Three concerns: read decisions (delegated to {@see TrustStore}), prompt the
+ * user when needed, and persist outcomes via the store. File I/O lives in the
+ * store; this class is pure policy + IO orchestration.
+ */
 final class SkillTrustManager
 {
-    private const EXTRA_KEY     = 'ai-agent-skill';
-    private const ALLOW_SUB_KEY = 'allow-skills';
-
-    /** @var array<string, bool>|null Cache of root config rules. */
+    /** @var array<string, bool>|null Cached snapshot of the persistent rule map. */
     private ?array $configRules = null;
 
-    /** @var array<string, bool> Session-only allow decisions. */
+    /** @var array<string, bool> Session-only allow decisions (not persisted). */
     private array $sessionRules = [];
 
     public function __construct(
         private readonly IOInterface $io,
-        private readonly string $rootDir,
+        private readonly TrustStore $store,
         private readonly ?string $rootPackageName = null,
     ) {
+    }
+
+    /**
+     * Convenience factory: build a manager backed by a TrustStore at $composerJsonPath.
+     *
+     * Most callers want this — only tests that need a custom store implementation
+     * should construct via the primary ctor.
+     */
+    public static function forComposerJson(IOInterface $io, string $composerJsonPath, ?string $rootPackageName = null): self
+    {
+        return new self($io, new TrustStore($composerJsonPath, $io), $rootPackageName);
     }
 
     public function hasDecision(string $packageName): bool
@@ -50,11 +64,8 @@ final class SkillTrustManager
     /**
      * Resolve trust for a package, prompting the user if the decision is unknown.
      *
-     * Only call from the install/update boundary — never from informational paths
-     * like `composer list-skills`. Mirrors Composer's PluginManager pattern.
-     *
-     * Returns the resolved {@see TrustState} so callers don't need to re-query
-     * hasDecision()/isAllowed() afterwards.
+     * Only call from the install/update boundary — never from informational
+     * paths like `composer list-skills`. Mirrors Composer's PluginManager.
      */
     public function decide(string $packageName): TrustState
     {
@@ -82,23 +93,18 @@ final class SkillTrustManager
     }
 
     /**
-     * Explicitly persist a decision without prompting.
-     *
-     * Used by the `composer skills:trust` command. Always writes to
-     * composer.json regardless of prior state.
+     * Explicitly persist a decision without prompting (used by `composer skills:trust`).
      */
     public function setExplicit(string $packageName, bool $allow): void
     {
         $rules = $this->loadConfigRules();
         $rules[$packageName] = $allow;
         $this->configRules = $rules;
-        $this->persistFullMap($rules);
+        $this->store->saveAllowSkills($rules);
     }
 
     /**
-     * Remove a package's persisted decision.
-     *
-     * If the package isn't in the map this is a no-op.
+     * Remove a package's persisted decision. Returns false if it wasn't there.
      */
     public function revoke(string $packageName): bool
     {
@@ -108,7 +114,7 @@ final class SkillTrustManager
         }
         unset($rules[$packageName]);
         $this->configRules = $rules;
-        $this->persistFullMap($rules);
+        $this->store->saveAllowSkills($rules);
         return true;
     }
 
@@ -116,22 +122,14 @@ final class SkillTrustManager
      * Decide first-run trust policy for legacy `type: ai-agent-skill` packages.
      *
      * Runs only if the allow-skills map is absent and there are legacy packages
-     * to consider. Three outcomes:
+     * to consider. See README "First-run policy".
      *
-     *   - **Interactive**: prompts `[n,d,a]` — None / Direct deps only / All.
-     *     Default `n` (strict). The chosen subset is persisted.
-     *   - **Non-interactive**: defaults to `n` and emits a warning listing the
-     *     affected packages with `composer skills:trust ...` recovery commands.
-     *
-     * In every case the (possibly empty) map is written so this prompt fires
-     * at most once per project.
-     *
-     * @param list<string> $legacyPackages    All installed packages with type:ai-agent-skill
-     * @param list<string> $directDependencies Subset of $legacyPackages directly required by root composer.json
+     * @param list<string> $legacyPackages    Installed packages with type:ai-agent-skill
+     * @param list<string> $directDependencies Subset directly required by root composer.json
      */
     public function applyFirstRunPolicy(array $legacyPackages, array $directDependencies): void
     {
-        if ($this->configMapExists()) {
+        if ($this->store->allowSkillsExists()) {
             return;
         }
         if ($legacyPackages === []) {
@@ -144,11 +142,11 @@ final class SkillTrustManager
             $this->io->writeError('<comment>The AI Agent Skill plugin found pre-existing skill packages but no trust decisions yet.</comment>');
             $this->io->writeError('<comment>Defaulting to deny-all in non-interactive mode. Authorize each one explicitly:</comment>');
             foreach ($legacyPackages as $pkg) {
-                $marker = isset($directSet[$pkg]) ? '(direct)' : '(transitive)';
+                $marker = isset($directSet[$pkg]) ? '(in your require)' : '(pulled in by another package)';
                 $this->io->writeError(sprintf('  <info>composer skills:trust %s</info>  %s', $pkg, $marker));
             }
             $this->configRules = [];
-            $this->persistFullMap([]);
+            $this->store->saveAllowSkills([]);
             return;
         }
 
@@ -158,7 +156,7 @@ final class SkillTrustManager
             count($legacyPackages) === 1 ? '' : 's',
         ));
         foreach ($legacyPackages as $pkg) {
-            $marker = isset($directSet[$pkg]) ? '<comment>(direct)</comment>' : '<comment>(transitive)</comment>';
+            $marker = isset($directSet[$pkg]) ? '<comment>(in your require)</comment>' : '<comment>(pulled in by another package)</comment>';
             $this->io->writeError(sprintf('  - %s  %s', $pkg, $marker));
         }
         $question = 'How should they be trusted on this first run?' . PHP_EOL
@@ -179,7 +177,17 @@ final class SkillTrustManager
             default => [],
         };
         $this->configRules = $rules;
-        $this->persistFullMap($rules);
+        $this->store->saveAllowSkills($rules);
+    }
+
+    /**
+     * Read-only access to the persisted rule map. Used by the list-trust command.
+     *
+     * @return array<string, bool>
+     */
+    public function getRules(): array
+    {
+        return $this->loadConfigRules();
     }
 
     private function prompt(string $packageName): TrustState
@@ -191,25 +199,39 @@ final class SkillTrustManager
             . '  [<comment>y</comment>] Yes — allow & persist (writes to composer.json)' . PHP_EOL
             . '  [<comment>n</comment>] No — deny & persist (suppress future prompts)' . PHP_EOL
             . '  [<comment>a</comment>] Allow for this session only' . PHP_EOL
-            . '  [<comment>d</comment>] Discard — do not allow, do not write' . PHP_EOL
-            . '(defaults to <comment>n</comment>) [y,n,a,d]: ',
+            . '  [<comment>d</comment>] Discard — leave undecided, ask again next run' . PHP_EOL
+            . '  [<comment>?</comment>] Show details about this choice' . PHP_EOL
+            . '(change later with: composer skills:trust %s [--deny|--revoke])' . PHP_EOL
+            . '(defaults to <comment>n</comment>) [y,n,a,d,?]: ',
+            $packageName,
             $packageName,
         );
 
-        $answer = $this->io->ask($question, 'n');
-        if (!is_string($answer)) {
-            $answer = 'n';
+        // Help loop matching Composer's PluginManager prompt: `?` shows
+        // descriptions and re-prompts.
+        while (true) {
+            $answer = $this->io->ask($question, 'n');
+            if (!is_string($answer)) {
+                $answer = 'n';
+            }
+            $choice = strtolower(trim($answer));
+            if ($choice === '?') {
+                $this->io->writeError([
+                    'y - allow this package to register skills, write to composer.json',
+                    'n - deny this package, write to composer.json (no future prompts)',
+                    'a - allow for this install/update only, do not modify composer.json',
+                    'd - skip without recording a decision; ask again next run',
+                ]);
+                continue;
+            }
+            $decision = TrustDecision::fromAnswer($choice) ?? TrustDecision::Deny;
+            return match ($decision) {
+                TrustDecision::Allow        => $this->persistAndReturn($packageName, true),
+                TrustDecision::Deny         => $this->persistAndReturn($packageName, false),
+                TrustDecision::SessionAllow => $this->sessionAllow($packageName),
+                TrustDecision::Discard      => TrustState::Pending,
+            };
         }
-        $decision = TrustDecision::fromAnswer($answer) ?? TrustDecision::Deny;
-
-        return match ($decision) {
-            TrustDecision::Allow => $this->persistAndReturn($packageName, true),
-            TrustDecision::Deny  => $this->persistAndReturn($packageName, false),
-            TrustDecision::SessionAllow => $this->sessionAllow($packageName),
-            // Discard: no persist, no session entry — package stays pending and
-            // will re-prompt next run.
-            TrustDecision::Discard => TrustState::Pending,
-        };
     }
 
     private function persistAndReturn(string $packageName, bool $allow): TrustState
@@ -217,7 +239,7 @@ final class SkillTrustManager
         $rules = $this->loadConfigRules();
         $rules[$packageName] = $allow;
         $this->configRules = $rules;
-        $this->persistFullMap($rules);
+        $this->store->saveAllowSkills($rules);
         return $allow ? TrustState::Allowed : TrustState::Denied;
     }
 
@@ -227,140 +249,19 @@ final class SkillTrustManager
         return TrustState::Allowed;
     }
 
-    /**
-     * Rewrite the allow-skills map without disturbing other extra.ai-agent-skill data.
-     *
-     * If the root project is itself a skill provider — i.e. its composer.json
-     * declares extra.ai-agent-skill as a string or array of paths — those paths
-     * are migrated under a `skills` sub-key so allow-skills can live alongside
-     * them. Object-form configs are merged: existing keys are preserved and
-     * `allow-skills` is set/replaced.
-     *
-     * @param array<string, bool> $rules
-     */
-    private function persistFullMap(array $rules): void
-    {
-        $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
-        if (!is_file($path)) {
-            return;
-        }
-        $contents = (string) file_get_contents($path);
-
-        $merged = $this->mergeWithExisting($contents, $rules);
-
-        $manipulator = new JsonManipulator($contents);
-        $manipulator->addSubNode('extra', self::EXTRA_KEY, $merged);
-        $newContents = $manipulator->getContents();
-
-        // Write atomically: write to a sibling temp file then rename. Avoids leaving
-        // a partially-written composer.json if the process is killed mid-write and
-        // narrows the TOCTOU window with parallel composer.json writers.
-        $tempPath = $path . '.skill-trust.' . bin2hex(random_bytes(8));
-        if (@file_put_contents($tempPath, $newContents) === false) {
-            $this->io->writeError(sprintf(
-                '<error>Failed to write trust decisions to %s. Check file permissions.</error>',
-                $path,
-            ));
-            return;
-        }
-        if (!@rename($tempPath, $path)) {
-            @unlink($tempPath);
-            $this->io->writeError(sprintf(
-                '<error>Failed to atomically replace %s with trust decisions.</error>',
-                $path,
-            ));
-        }
-    }
-
-    /**
-     * Build the new extra.ai-agent-skill object, preserving any existing data.
-     *
-     * @param array<string, bool> $rules
-     * @return array<string, mixed>
-     */
-    private function mergeWithExisting(string $composerJsonContents, array $rules): array
-    {
-        $data = json_decode($composerJsonContents, true);
-        $existing = null;
-        if (is_array($data)) {
-            $extra = $data['extra'] ?? null;
-            if (is_array($extra)) {
-                $existing = $extra[self::EXTRA_KEY] ?? null;
-            }
-        }
-
-        $merged = [];
-
-        if (is_string($existing)) {
-            // Legacy: "extra.ai-agent-skill": "skills/foo.md" — migrate to skills sub-key.
-            $merged['skills'] = [$existing];
-        } elseif (is_array($existing) && array_is_list($existing)) {
-            // Legacy: array of paths.
-            $merged['skills'] = $existing;
-        } elseif (is_array($existing)) {
-            // Object form: keep every existing sub-key (skills, etc.) and overlay allow-skills.
-            foreach ($existing as $key => $value) {
-                if (is_string($key)) {
-                    $merged[$key] = $value;
-                }
-            }
-        }
-
-        $merged[self::ALLOW_SUB_KEY] = $rules;
-        return $merged;
-    }
-
-    /**
-     * Convert a trust-map pattern to a case-sensitive regex.
-     *
-     * Composer package names are normalized to lowercase, so case-insensitive
-     * matching (which Composer's BasePackage::packageNameToRegexp produces) would
-     * let `acme/*: true` also trust `Acme/Evil` on private repos that don't
-     * normalize. Trust matching uses exact case to avoid that surprise.
-     */
-    private static function patternToRegex(string $pattern): string
-    {
-        return '{^' . str_replace('\\*', '.*', preg_quote($pattern, '{')) . '$}';
-    }
-
-    private function configMapExists(): bool
-    {
-        $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
-        if (!is_file($path)) {
-            return false;
-        }
-        $data = json_decode((string) file_get_contents($path), true);
-        if (!is_array($data)) {
-            return false;
-        }
-        $extra = $data['extra'] ?? null;
-        if (!is_array($extra)) {
-            return false;
-        }
-        $skillExtra = $extra[self::EXTRA_KEY] ?? null;
-        if (!is_array($skillExtra)) {
-            return false;
-        }
-        return isset($skillExtra[self::ALLOW_SUB_KEY]) && is_array($skillExtra[self::ALLOW_SUB_KEY]);
-    }
-
     private function matchPattern(string $packageName): ?bool
     {
         $rules = $this->loadConfigRules();
 
-        // Two-pass: exact-string matches always win over glob patterns, even
-        // when the glob was added first. Otherwise a user who runs
-        //   composer skills:trust vendor/foo --deny
-        // after an earlier `vendor/*: true` glob would be silently overruled.
+        // Two-pass: exact-string matches always win over glob patterns,
+        // even when the glob was added first.
         if (array_key_exists($packageName, $rules)) {
             return $rules[$packageName];
         }
         foreach ($rules as $pattern => $allow) {
             if ($pattern === $packageName) {
-                continue; // already handled by the exact-match pass
+                continue;
             }
-            // Skip non-glob patterns — they couldn't match anyway and skipping
-            // here lets us avoid an extra preg_match per non-glob rule.
             if (!str_contains($pattern, '*')) {
                 continue;
             }
@@ -373,6 +274,19 @@ final class SkillTrustManager
     }
 
     /**
+     * Case-sensitive regex builder for trust patterns.
+     *
+     * Composer normalizes package names to lowercase, but
+     * BasePackage::packageNameToRegexp always sets /i — case-insensitive
+     * matching would let `acme/*: true` also trust `Acme/Evil` on private
+     * repos that don't normalize. We use exact case here.
+     */
+    private static function patternToRegex(string $pattern): string
+    {
+        return '{^' . str_replace('\\*', '.*', preg_quote($pattern, '{')) . '$}';
+    }
+
+    /**
      * @return array<string, bool>
      */
     private function loadConfigRules(): array
@@ -380,33 +294,6 @@ final class SkillTrustManager
         if ($this->configRules !== null) {
             return $this->configRules;
         }
-        $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
-        if (!is_file($path)) {
-            return $this->configRules = [];
-        }
-        $raw = (string) file_get_contents($path);
-        $data = json_decode($raw, true);
-        if (!is_array($data)) {
-            return $this->configRules = [];
-        }
-        $extra = $data['extra'] ?? null;
-        if (!is_array($extra)) {
-            return $this->configRules = [];
-        }
-        $skillExtra = $extra[self::EXTRA_KEY] ?? null;
-        if (!is_array($skillExtra)) {
-            return $this->configRules = [];
-        }
-        $rules = $skillExtra[self::ALLOW_SUB_KEY] ?? [];
-        if (!is_array($rules)) {
-            return $this->configRules = [];
-        }
-        $clean = [];
-        foreach ($rules as $pattern => $allow) {
-            if (is_string($pattern) && is_bool($allow)) {
-                $clean[$pattern] = $allow;
-            }
-        }
-        return $this->configRules = $clean;
+        return $this->configRules = $this->store->loadAllowSkills();
     }
 }

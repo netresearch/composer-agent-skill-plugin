@@ -98,10 +98,7 @@ final class SkillDiscoveryTest extends TestCase
         ]));
 
         try {
-            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
-                new \Composer\IO\BufferIO(),
-                $rootDir,
-            );
+            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(new \Composer\IO\BufferIO(), $rootDir . "/composer.json");
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $skills = $discovery->discoverAllSkills();
 
@@ -128,9 +125,9 @@ final class SkillDiscoveryTest extends TestCase
         file_put_contents($rootDir . '/composer.json', "{\n}\n");
 
         try {
-            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(
                 new \Composer\IO\BufferIO(), // non-interactive by default
-                $rootDir,
+                $rootDir . '/composer.json',
             );
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $skills = $discovery->discoverAllSkills();
@@ -158,10 +155,7 @@ final class SkillDiscoveryTest extends TestCase
         ]));
 
         try {
-            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
-                new \Composer\IO\BufferIO(),
-                $rootDir,
-            );
+            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(new \Composer\IO\BufferIO(), $rootDir . "/composer.json");
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $skills = $discovery->discoverAllSkills();
 

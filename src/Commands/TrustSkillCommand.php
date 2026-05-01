@@ -60,15 +60,23 @@ final class TrustSkillCommand extends BaseCommand
             return self::FAILURE;
         }
 
-        $rootDir = getcwd();
-        if ($rootDir === false) {
-            $output->writeln('<error>Could not determine current working directory.</error>');
-            return self::FAILURE;
-        }
-
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
-        $trust = new SkillTrustManager($io, $rootDir);
+
+        $composer = $this->tryComposer();
+        if ($composer !== null) {
+            $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
+            $rootName = $composer->getPackage()->getName();
+        } else {
+            $cwd = getcwd();
+            if ($cwd === false) {
+                $output->writeln('<error>Could not determine current working directory.</error>');
+                return self::FAILURE;
+            }
+            $composerJsonPath = $cwd . DIRECTORY_SEPARATOR . 'composer.json';
+            $rootName = null;
+        }
+        $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
 
         if ($revoke) {
             $removed = $trust->revoke($package);

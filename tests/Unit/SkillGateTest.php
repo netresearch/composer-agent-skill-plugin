@@ -41,7 +41,7 @@ final class SkillGateTest extends TestCase
             $this->rootDir . '/composer.json',
             (string) json_encode(['extra' => ['ai-agent-skill' => ['allow-skills' => $allowMap]]])
         );
-        return new SkillTrustManager($io ?? new BufferIO(), $this->rootDir);
+        return SkillTrustManager::forComposerJson($io ?? new BufferIO(), $this->rootDir . '/composer.json');
     }
 
     /** @return array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState} */
