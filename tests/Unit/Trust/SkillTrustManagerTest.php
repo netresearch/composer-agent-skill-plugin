@@ -258,4 +258,59 @@ final class SkillTrustManagerTest extends TestCase
 
         self::assertSame($original, file_get_contents($this->composerJsonPath));
     }
+
+    public function testPersistPreservesExistingStringSkillsValue(): void
+    {
+        // Root project is itself a skill provider with extra.ai-agent-skill = "SKILL.md".
+        // Persisting allow-skills must NOT destroy that — migrate it under skills sub-key.
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => 'SKILL.md'],
+        ], JSON_PRETTY_PRINT));
+
+        $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
+        self::assertTrue($mgr->decide('vendor/foo'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        // Original skills value preserved under the skills sub-key.
+        self::assertSame(['SKILL.md'], $data['extra']['ai-agent-skill']['skills']);
+        // New allow-skills present.
+        self::assertSame(['vendor/foo' => true], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testPersistPreservesExistingArraySkillsValue(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['skills/a.md', 'skills/b.md']],
+        ], JSON_PRETTY_PRINT));
+
+        $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
+        self::assertTrue($mgr->decide('vendor/foo'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(['skills/a.md', 'skills/b.md'], $data['extra']['ai-agent-skill']['skills']);
+        self::assertSame(['vendor/foo' => true], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testPersistPreservesExistingObjectFormSkills(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => [
+                'ai-agent-skill' => [
+                    'skills' => ['skills/a.md'],
+                    'something-else' => 'value',
+                ],
+            ],
+        ], JSON_PRETTY_PRINT));
+
+        $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
+        self::assertTrue($mgr->decide('vendor/foo'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(['skills/a.md'], $data['extra']['ai-agent-skill']['skills']);
+        self::assertSame('value', $data['extra']['ai-agent-skill']['something-else']);
+        self::assertSame(['vendor/foo' => true], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
 }

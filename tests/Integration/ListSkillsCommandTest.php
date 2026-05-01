@@ -46,7 +46,7 @@ final class ListSkillsCommandTest extends TestCase
 
     public function testEmptyMessageWhenNoSkills(): void
     {
-        $provider = new class implements PackageProvider {
+        $provider = new class () implements PackageProvider {
             public function iterAllPackages(): iterable
             {
                 yield from [];

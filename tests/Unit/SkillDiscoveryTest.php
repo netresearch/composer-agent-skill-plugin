@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Tests\Unit;
 
 use Composer\IO\IOInterface;
-use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;

@@ -127,7 +127,13 @@ final class SkillTrustManager
     }
 
     /**
-     * Rewrite the entire allow-skills map atomically.
+     * Rewrite the allow-skills map without disturbing other extra.ai-agent-skill data.
+     *
+     * If the root project is itself a skill provider — i.e. its composer.json
+     * declares extra.ai-agent-skill as a string or array of paths — those paths
+     * are migrated under a `skills` sub-key so allow-skills can live alongside
+     * them. Object-form configs are merged: existing keys are preserved and
+     * `allow-skills` is set/replaced.
      *
      * @param array<string, bool> $rules
      */
@@ -138,9 +144,44 @@ final class SkillTrustManager
             return;
         }
         $contents = (string) file_get_contents($path);
+
+        $merged = $this->mergeWithExisting($contents, $rules);
+
         $manipulator = new JsonManipulator($contents);
-        $manipulator->addSubNode('extra', self::EXTRA_KEY, [self::ALLOW_SUB_KEY => $rules]);
+        $manipulator->addSubNode('extra', self::EXTRA_KEY, $merged);
         file_put_contents($path, $manipulator->getContents());
+    }
+
+    /**
+     * Build the new extra.ai-agent-skill object, preserving any existing data.
+     *
+     * @param array<string, bool> $rules
+     * @return array<string, mixed>
+     */
+    private function mergeWithExisting(string $composerJsonContents, array $rules): array
+    {
+        $data = json_decode($composerJsonContents, true);
+        $existing = is_array($data) ? ($data['extra'][self::EXTRA_KEY] ?? null) : null;
+
+        $merged = [];
+
+        if (is_string($existing)) {
+            // Legacy: "extra.ai-agent-skill": "skills/foo.md" — migrate to skills sub-key.
+            $merged['skills'] = [$existing];
+        } elseif (is_array($existing) && array_is_list($existing)) {
+            // Legacy: array of paths.
+            $merged['skills'] = $existing;
+        } elseif (is_array($existing)) {
+            // Object form: keep every existing sub-key (skills, etc.) and overlay allow-skills.
+            foreach ($existing as $key => $value) {
+                if (is_string($key)) {
+                    $merged[$key] = $value;
+                }
+            }
+        }
+
+        $merged[self::ALLOW_SUB_KEY] = $rules;
+        return $merged;
     }
 
     private function configMapExists(): bool
