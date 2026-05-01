@@ -850,11 +850,38 @@ See docs/architecture.md for system design details.
 
 ---
 
+## Addendum: Universal Discovery & Trust (v0.2.0)
+
+Originally the plugin required packages to declare `type: ai-agent-skill`. Issue [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42) showed this is too restrictive — a library's `type` is already taken by its primary identity (`library`, `symfony-bundle`, `typo3-cms-extension`, etc.), and forcing maintainers to ship a separate companion package for every library that wants to bundle a skill doubles the maintenance surface.
+
+### Discovery change
+
+Discovery now iterates **all** installed packages and selects those that either:
+
+1. Declare `extra.ai-agent-skill` (the new primary path; mirrors `phpstan/extension-installer`'s `extra.phpstan.includes`), **or**
+2. Carry the legacy `type: ai-agent-skill` (preserved for existing pure-skill packages).
+
+`SkillDiscovery::discoverAllSkills()` is now pure: it never prompts, never mutates state. Each returned skill carries a `trust_state` field (`allowed` / `denied` / `pending`) populated by reading the trust manager. This lets `composer list-skills` surface a complete inventory without firing trust prompts.
+
+### Trust change
+
+Broadening discovery means any transitive dependency could potentially register skills. To keep the security story intact, the plugin requires per-package opt-in before reading SKILL.md content for inclusion in `AGENTS.md` — the same shape Composer uses for `allow-plugins`:
+
+- **Interactive mode**: `[y,n,a,d]` prompt; `y`/`n` persist to `composer.json`, `a` is session-only, `d` discards.
+- **Non-interactive mode**: skip with a `composer config --json` hint (gentler than Composer's hard-fail; CI stays deterministic).
+- **Persistence**: `extra.ai-agent-skill.allow-skills` in the root `composer.json`. Glob patterns (`vendor/*`) supported via `BasePackage::packageNameToRegexp()`.
+- **Boundary**: only `SkillPlugin::updateAgentsMd()` — the install/update event handler — invokes `SkillTrustManager::decide()`. Discovery and reporting never prompt.
+
+### Auto-seeding for upgrades
+
+To prevent a re-prompt avalanche when existing users upgrade, the plugin auto-seeds the `allow-skills` map on first run with the currently-installed `type: ai-agent-skill` packages. The user already chose to `composer require` those packages — implicit trust. Auto-seeding is a one-shot operation (skipped if the map already exists).
+
 ## Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0.0 | 2025-11-24 | Paul Siedler | Initial PRD from brainstorming session |
+| 1.1.0 | 2026-05-01 | Sebastian Mendel | Universal discovery & trust addendum (issue [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42)) |
 
 ---
 

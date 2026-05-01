@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Universal skill discovery**: any Composer package can now ship skills via `extra.ai-agent-skill`, regardless of its declared `type`. Closes [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42).
+- **Trust prompt**: first-time discovery from a new package prompts the user (`y`/`n`/`a`/`d`) before registering its skills. Decisions persist in root `composer.json` under `extra.ai-agent-skill.allow-skills` with glob support, mirroring Composer's `config.allow-plugins`.
+- **Auto-seeding for upgrades**: existing `type: ai-agent-skill` packages installed before this version are auto-trusted on first run. No re-prompt avalanche on upgrade.
+- `composer list-skills` now shows trust state (`[allowed]` / `[pending]` / `[denied]`) per skill and a footer count of pending packages. The command is purely informational and never prompts.
+- `SkillTrustManager`, `PackageProvider`, `InstalledVersionsProvider`, `PackageInfo`, and `TrustDecision` abstractions for testability.
+
+### Changed
+- `SkillDiscovery` no longer filters by package `type`. Legacy `type: ai-agent-skill` packages with a root `SKILL.md` continue to work unchanged.
+- `SkillDiscovery::discoverAllSkills()` is now pure — it enumerates every declared skill with a `trust_state` field but never prompts. Gating happens at the install/update boundary in `SkillPlugin::updateAgentsMd()` only.
+- Non-interactive `composer install` now skips untrusted skill packages with a `composer config --json` hint instead of registering them silently.
+- PHPStan level bumped from 8 to 10 (max).
+
 ## [1.1.2] - 2025-11-26
 
 ### Fixed
