@@ -91,6 +91,8 @@ composer list-skills
 composer read-skill database-analyzer
 ```
 
+> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, and more.
+
 ## Trust Model
 
 Skills are instructions an AI agent will follow in your project. To prevent transitive dependencies from silently injecting skills, the plugin asks before registering skills from a new package — modeled on Composer's own `allow-plugins` flow.
