@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > for the rationale.
 
 ### Added
+- **PHP 8.5 and Symfony 8.0 support** in the test matrix and Composer constraints (`symfony/yaml`, `symfony/console`). PHP 8.4 and Symfony 5.4/6.4/7.2 remain tested.
 - **Universal skill discovery**: any Composer package can now ship skills via `extra.ai-agent-skill`, regardless of its declared `type`. Closes [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42).
 - **Trust prompt**: first-time discovery from a new package prompts the user (`y`/`n`/`a`/`d`) before registering its skills. Decisions persist in root `composer.json` under `extra.ai-agent-skill.allow-skills` with glob support, mirroring Composer's `config.allow-plugins`.
 - **First-run policy prompt** for legacy `type: ai-agent-skill` packages: `[n] None / [d] Direct deps only / [a] All`, default `n` (strict). Non-interactive mode defaults to `n` with a per-package `composer skills:trust ...` recovery hint, so CI never silently auto-trusts dependencies. Replaces the earlier prototype's "auto-seed everything" behavior flagged HIGH by the security review.

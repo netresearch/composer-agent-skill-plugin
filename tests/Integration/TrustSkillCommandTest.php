@@ -6,11 +6,14 @@ namespace Netresearch\ComposerAgentSkillPlugin\Tests\Integration;
 
 use Composer\Console\Application;
 use Netresearch\ComposerAgentSkillPlugin\Commands\TrustSkillCommand;
+use Netresearch\ComposerAgentSkillPlugin\Tests\Support\RegistersConsoleCommands;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class TrustSkillCommandTest extends TestCase
 {
+    use RegistersConsoleCommands;
+
     private string $rootDir;
     private string $cwdBackup;
 
@@ -44,7 +47,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'vendor/foo']);
@@ -59,7 +62,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'vendor/bar', '--deny' => true]);
@@ -81,7 +84,7 @@ final class TrustSkillCommandTest extends TestCase
 
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'vendor/foo', '--revoke' => true]);
@@ -97,7 +100,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'evil/*; rm -rf']);
@@ -113,7 +116,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'Vendor/Foo']);
@@ -126,7 +129,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'vendor/*']);
@@ -140,7 +143,7 @@ final class TrustSkillCommandTest extends TestCase
     {
         $command = new TrustSkillCommand();
         $app = new Application();
-        $app->add($command);
+        self::registerCommand($app, $command);
         $tester = new CommandTester($command);
 
         $exit = $tester->execute(['package' => 'vendor/foo', '--deny' => true, '--revoke' => true]);
