@@ -68,7 +68,14 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     /**
      * Get subscribed events.
      *
-     * Registers event handlers for post-install and post-update commands.
+     * Hooks into install and update; both fire `composer require` indirectly
+     * (it runs an update internally). `composer create-project` covers itself
+     * because it dispatches POST_INSTALL_CMD before its own POST_CREATE_PROJECT_CMD.
+     *
+     * Deliberately NOT subscribing to POST_AUTOLOAD_DUMP — `composer dump-autoload`
+     * is invoked when developers regenerate autoload files, but vendored skills
+     * are not normally edited in place. Subscribing would re-scan the package
+     * tree on every dump for no behavioral gain.
      *
      * @return array<string, string|array<int, string|int>>
      */

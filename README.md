@@ -139,6 +139,16 @@ Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
 
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
+### Upgrading from v0.1.x
+
+If you upgrade from v0.1.x with `type: ai-agent-skill` packages already installed, the first install/update after the upgrade triggers a one-time prompt asking how to seed the trust map. Choose:
+
+- **`[a]`** to keep the v0.1.x default (every existing skill package auto-trusted) — fastest, widest trust surface.
+- **`[d]`** to auto-trust only the dedicated skill packages your root `composer.json` directly requires; transitive ones still prompt per-package.
+- **`[n]`** (default) to auto-trust nothing — every package goes through the per-package prompt during the same install.
+
+Non-interactive runs (`--no-interaction`, CI) default to `[n]` with a `composer skills:trust <package>` recovery line per affected package.
+
 ### First-run policy for `type: ai-agent-skill` packages
 
 The first time the plugin runs in a project that already has `type: ai-agent-skill` packages installed, you'll see a one-time prompt asking how to handle them:

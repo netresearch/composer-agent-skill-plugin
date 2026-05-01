@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+> **First-run trust default changed from "auto-trust everything" to "deny by default".**
+> If you upgrade an existing installation that was implicitly relying on the
+> v0.1.x behaviour where every `type: ai-agent-skill` package was auto-registered
+> in `AGENTS.md`, you will now see a one-time prompt asking how to seed the
+> trust map (`[n] None / [d] Direct deps only / [a] All`). Choose `[a]` to
+> preserve the previous behaviour. Non-interactive runs (CI) default to `[n]`
+> with a `composer skills:trust …` recovery line per affected package.
+>
+> See [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42)
+> and the security review on PR [#43](https://github.com/netresearch/composer-agent-skill-plugin/pull/43)
+> for the rationale.
+
 ### Added
 - **Universal skill discovery**: any Composer package can now ship skills via `extra.ai-agent-skill`, regardless of its declared `type`. Closes [#42](https://github.com/netresearch/composer-agent-skill-plugin/issues/42).
 - **Trust prompt**: first-time discovery from a new package prompts the user (`y`/`n`/`a`/`d`) before registering its skills. Decisions persist in root `composer.json` under `extra.ai-agent-skill.allow-skills` with glob support, mirroring Composer's `config.allow-plugins`.
