@@ -142,6 +142,8 @@ final class SkillDiscovery
         $skills = [];
         $skillPaths = $this->resolveSkillPaths($packageName, $installPath);
 
+        $packageRealPath = realpath($installPath);
+
         foreach ($skillPaths as $relativePath) {
             $absolutePath = $installPath . DIRECTORY_SEPARATOR . $relativePath;
 
@@ -158,6 +160,24 @@ final class SkillDiscovery
                     )
                 );
                 continue;
+            }
+
+            // Defense-in-depth: even after rejecting '..' segments, a symlink inside
+            // the package could point outside it. Verify the resolved file is rooted
+            // at the resolved package directory.
+            $resolvedFile = realpath($absolutePath);
+            if ($packageRealPath !== false && $resolvedFile !== false) {
+                $boundary = $packageRealPath . DIRECTORY_SEPARATOR;
+                if (!str_starts_with($resolvedFile . DIRECTORY_SEPARATOR, $boundary)) {
+                    $this->addWarning(
+                        $packageName,
+                        sprintf(
+                            "Skill path '%s' resolves outside the package directory (symlink escape).",
+                            $relativePath
+                        )
+                    );
+                    continue;
+                }
             }
 
             $skillData = $this->parseSkillFile($packageName, $absolutePath, $relativePath);
@@ -211,6 +231,17 @@ final class SkillDiscovery
                 );
                 return [];
             }
+            if ($this->isUnsafeRelativePath($config)) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Path traversal '..' rejected in 'extra.ai-agent-skill': '%s'.\n" .
+                        "                   Skill paths must stay within the package directory.",
+                        $config
+                    )
+                );
+                return [];
+            }
             return [$config];
         }
 
@@ -227,6 +258,17 @@ final class SkillDiscovery
                         sprintf(
                             "Absolute path '%s' not allowed in 'extra.ai-agent-skill'.\n" .
                             "                   Use relative paths from package root.",
+                            $path
+                        )
+                    );
+                    continue;
+                }
+                if ($this->isUnsafeRelativePath($path)) {
+                    $this->addWarning(
+                        $packageName,
+                        sprintf(
+                            "Path traversal '..' rejected in 'extra.ai-agent-skill': '%s'.\n" .
+                            "                   Skill paths must stay within the package directory.",
                             $path
                         )
                     );
@@ -249,6 +291,27 @@ final class SkillDiscovery
         // Windows absolute path matches C:\ or similar
         return str_starts_with($path, '/') ||
                (strlen($path) > 1 && $path[1] === ':');
+    }
+
+    /**
+     * Check if a relative path contains traversal segments (..).
+     *
+     * Reject any path where any segment (split by / or \) is exactly "..".
+     * This blocks both leading "../foo" and embedded "subdir/../escape" forms.
+     * "foo..bar" inside a filename component is safe and not flagged.
+     */
+    private function isUnsafeRelativePath(string $path): bool
+    {
+        $segments = preg_split('#[/\\\\]+#', $path);
+        if ($segments === false) {
+            return true;
+        }
+        foreach ($segments as $segment) {
+            if ($segment === '..') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

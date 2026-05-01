@@ -239,6 +239,26 @@ final class SkillDiscoveryTest extends TestCase
         $this->assertFalse($method->invoke($this->discovery, '../relative'));
     }
 
+    public function testRejectPathTraversal(): void
+    {
+        // SECURITY: relative paths with .. segments must be rejected so a
+        // malicious package can't read files outside its install directory.
+        $method = new \ReflectionMethod(SkillDiscovery::class, 'isUnsafeRelativePath');
+
+        // Traversal attempts
+        $this->assertTrue($method->invoke($this->discovery, '../etc/passwd'));
+        $this->assertTrue($method->invoke($this->discovery, 'subdir/../../etc/passwd'));
+        $this->assertTrue($method->invoke($this->discovery, '..'));
+        $this->assertTrue($method->invoke($this->discovery, 'a/b/../../../c'));
+
+        // Safe relative paths
+        $this->assertFalse($method->invoke($this->discovery, 'SKILL.md'));
+        $this->assertFalse($method->invoke($this->discovery, 'skills/a.md'));
+        $this->assertFalse($method->invoke($this->discovery, 'skills/sub/a.md'));
+        // ".." appearing in a filename component (not a path segment) is safe
+        $this->assertFalse($method->invoke($this->discovery, 'skills/foo..bar.md'));
+    }
+
     public function testValidateNameFormat(): void
     {
         // Test name validation: lowercase, alphanumeric, hyphens only
