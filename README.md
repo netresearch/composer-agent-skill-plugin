@@ -139,14 +139,29 @@ Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
 
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
-### Auto-seeding for `type: ai-agent-skill` packages
+### First-run policy for `type: ai-agent-skill` packages
 
-The first time the plugin runs, if `extra.ai-agent-skill.allow-skills` is absent it auto-seeds entries for every currently-installed package whose `type` is `ai-agent-skill`. Rationale: you already chose to `composer require` those dedicated skill packages — they exist for one reason — so re-prompting would be more surprising than allowing. This applies to:
+The first time the plugin runs in a project that already has `type: ai-agent-skill` packages installed, you'll see a one-time prompt asking how to handle them:
 
-- **Upgrades**: existing installations don't get a re-prompt avalanche on first run after the plugin update.
-- **Fresh installs**: a `composer require some/skill-package` immediately followed by an install does not prompt for that package.
+```
+The AI Agent Skill plugin found 3 existing skill packages that have not been authorized yet.
+  - vendor/skill-a   (direct)
+  - vendor/skill-b   (transitive)
+  - vendor/skill-c   (transitive)
+How should they be trusted on this first run?
+  [n] None — prompt for each package later (default, strict)
+  [d] Direct dependencies only — auto-trust packages your root composer.json explicitly requires
+  [a] All — auto-trust every existing skill package (including transitive)
+(defaults to n) [n,d,a]:
+```
 
-The seeded entries appear in your root `composer.json` and you can flip any of them to `false` afterwards. Auto-seeding is one-shot — once the map exists it's never touched again automatically. Library-bundled skills (`type: library` + `extra.ai-agent-skill`) are **not** auto-seeded; they always go through the prompt because the user chose the library for its primary purpose, not to import skills.
+- **`n` (default, recommended)**: nothing is auto-trusted. Each package goes through the per-package trust prompt during the same install.
+- **`d`**: only packages listed directly in your root `composer.json`'s `require`/`require-dev` are auto-trusted. Transitive skill packages still prompt.
+- **`a`**: every existing skill package is auto-trusted (the v0.1.x default — convenient but wider trust surface).
+
+The choice is persisted by writing the resulting map to `extra.ai-agent-skill.allow-skills`, so the prompt only fires once. **In non-interactive mode** (`composer install --no-interaction`, CI), the policy defaults to `n` and a warning lists every affected package with the `composer skills:trust ...` recovery command. CI installs never silently expand trust on your behalf.
+
+Library-bundled skills (`type: library` + `extra.ai-agent-skill`) are **not** part of this first-run policy — they always go through the per-package prompt because the user chose the library for its primary purpose, not to import skills.
 
 ## Usage
 

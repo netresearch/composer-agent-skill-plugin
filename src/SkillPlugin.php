@@ -104,16 +104,26 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                 $rootPackageName,
             );
 
-            // Auto-seed: existing type: ai-agent-skill packages are implicitly trusted
-            // on first run. The user already chose to `composer require` them, so
-            // re-prompting on every legacy package would be more surprising than allowing.
+            // First-run policy: when the trust map is missing AND there are legacy
+            // type:ai-agent-skill packages, ask the user once how to seed
+            // (none/direct/all). Defaults to 'none' (strict) — including in
+            // non-interactive mode, which also emits a recovery hint per package.
+            $rootRequires = $event->getComposer()->getPackage()->getRequires();
+            $rootDevRequires = $event->getComposer()->getPackage()->getDevRequires();
+            $directNames = array_merge(array_keys($rootRequires), array_keys($rootDevRequires));
+            $directSet = array_fill_keys($directNames, true);
+
             $legacyPackages = [];
+            $directLegacy = [];
             foreach ($provider->iterAllPackages() as $pkg) {
                 if ($pkg->type === 'ai-agent-skill') {
                     $legacyPackages[] = $pkg->name;
+                    if (isset($directSet[$pkg->name])) {
+                        $directLegacy[] = $pkg->name;
+                    }
                 }
             }
-            $trust->seedIfAbsent($legacyPackages);
+            $trust->applyFirstRunPolicy($legacyPackages, $directLegacy);
 
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $allSkills = $discovery->discoverAllSkills();

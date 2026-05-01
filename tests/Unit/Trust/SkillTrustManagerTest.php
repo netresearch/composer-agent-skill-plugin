@@ -221,19 +221,7 @@ final class SkillTrustManagerTest extends TestCase
         );
     }
 
-    public function testSeedIfAbsentWritesMap(): void
-    {
-        file_put_contents($this->composerJsonPath, "{\n}\n");
-        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
-        $mgr->seedIfAbsent(['vendor/legacy-a', 'vendor/legacy-b']);
-
-        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
-        self::assertIsArray($data);
-        self::assertSame(true, $data['extra']['ai-agent-skill']['allow-skills']['vendor/legacy-a']);
-        self::assertSame(true, $data['extra']['ai-agent-skill']['allow-skills']['vendor/legacy-b']);
-    }
-
-    public function testSeedIfAbsentSkipsWhenMapPresent(): void
+    public function testFirstRunSkippedWhenMapPresent(): void
     {
         file_put_contents($this->composerJsonPath, (string) json_encode([
             'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/foo' => true]]],
@@ -241,9 +229,86 @@ final class SkillTrustManagerTest extends TestCase
         $original = (string) file_get_contents($this->composerJsonPath);
 
         $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
-        $mgr->seedIfAbsent(['vendor/should-not-appear']);
+        $mgr->applyFirstRunPolicy(['vendor/should-not-appear'], []);
 
         self::assertSame($original, file_get_contents($this->composerJsonPath));
+    }
+
+    public function testFirstRunNonInteractiveDefaultsToNoneWithWarning(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = new BufferIO();
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+
+        $mgr->applyFirstRunPolicy(
+            legacyPackages: ['vendor/legacy-a', 'vendor/legacy-b'],
+            directDependencies: ['vendor/legacy-a'],
+        );
+
+        // Map written as empty so we don't ask again.
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame([], $data['extra']['ai-agent-skill']['allow-skills']);
+
+        // Warning lists affected packages with skills:trust hints.
+        $output = $io->getOutput();
+        self::assertStringContainsString('vendor/legacy-a', $output);
+        self::assertStringContainsString('vendor/legacy-b', $output);
+        self::assertStringContainsString('composer skills:trust', $output);
+    }
+
+    public function testFirstRunInteractivePromptDefaultIsNone(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn('n');
+
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+        $mgr->applyFirstRunPolicy(['vendor/legacy-a'], ['vendor/legacy-a']);
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertSame([], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testFirstRunInteractivePromptDirectOnly(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn('d');
+
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+        $mgr->applyFirstRunPolicy(
+            legacyPackages: ['vendor/direct', 'vendor/transitive'],
+            directDependencies: ['vendor/direct'],
+        );
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertSame(
+            ['vendor/direct' => true],
+            $data['extra']['ai-agent-skill']['allow-skills'],
+        );
+    }
+
+    public function testFirstRunInteractivePromptAll(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn('a');
+
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+        $mgr->applyFirstRunPolicy(
+            legacyPackages: ['vendor/direct', 'vendor/transitive'],
+            directDependencies: ['vendor/direct'],
+        );
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertSame(
+            ['vendor/direct' => true, 'vendor/transitive' => true],
+            $data['extra']['ai-agent-skill']['allow-skills'],
+        );
     }
 
     public function testRootPackageIsAlwaysAllowed(): void
@@ -265,13 +330,13 @@ final class SkillTrustManagerTest extends TestCase
         self::assertFalse($mgr->hasDecision('any/pkg'));
     }
 
-    public function testSeedIfAbsentWithNoLegacyPackagesDoesNothing(): void
+    public function testFirstRunWithNoLegacyPackagesDoesNothing(): void
     {
         file_put_contents($this->composerJsonPath, "{\n}\n");
         $original = (string) file_get_contents($this->composerJsonPath);
 
         $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
-        $mgr->seedIfAbsent([]);
+        $mgr->applyFirstRunPolicy([], []);
 
         self::assertSame($original, file_get_contents($this->composerJsonPath));
     }

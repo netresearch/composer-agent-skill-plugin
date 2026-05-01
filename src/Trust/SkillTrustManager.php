@@ -111,26 +111,71 @@ final class SkillTrustManager
     }
 
     /**
-     * Seed allow-skills with currently-installed packages.
+     * Decide first-run trust policy for legacy `type: ai-agent-skill` packages.
      *
-     * Skipped if the map already exists. Used to auto-trust legacy
-     * type: ai-agent-skill packages on first upgrade — the user already
-     * chose to require them.
+     * Runs only if the allow-skills map is absent and there are legacy packages
+     * to consider. Three outcomes:
      *
-     * @param iterable<string> $packageNames
+     *   - **Interactive**: prompts `[n,d,a]` — None / Direct deps only / All.
+     *     Default `n` (strict). The chosen subset is persisted.
+     *   - **Non-interactive**: defaults to `n` and emits a warning listing the
+     *     affected packages with `composer skills:trust ...` recovery commands.
+     *
+     * In every case the (possibly empty) map is written so this prompt fires
+     * at most once per project.
+     *
+     * @param list<string> $legacyPackages    All installed packages with type:ai-agent-skill
+     * @param list<string> $directDependencies Subset of $legacyPackages directly required by root composer.json
      */
-    public function seedIfAbsent(iterable $packageNames): void
+    public function applyFirstRunPolicy(array $legacyPackages, array $directDependencies): void
     {
         if ($this->configMapExists()) {
             return;
         }
-        $rules = [];
-        foreach ($packageNames as $name) {
-            $rules[$name] = true;
-        }
-        if ($rules === []) {
+        if ($legacyPackages === []) {
             return;
         }
+
+        $directSet = array_fill_keys($directDependencies, true);
+
+        if (!$this->io->isInteractive()) {
+            $this->io->writeError('<comment>The AI Agent Skill plugin found pre-existing skill packages but no trust decisions yet.</comment>');
+            $this->io->writeError('<comment>Defaulting to deny-all in non-interactive mode. Authorize each one explicitly:</comment>');
+            foreach ($legacyPackages as $pkg) {
+                $marker = isset($directSet[$pkg]) ? '(direct)' : '(transitive)';
+                $this->io->writeError(sprintf('  <info>composer skills:trust %s</info>  %s', $pkg, $marker));
+            }
+            $this->configRules = [];
+            $this->persistFullMap([]);
+            return;
+        }
+
+        $this->io->writeError(sprintf(
+            '<info>The AI Agent Skill plugin found %d existing skill package%s that have not been authorized yet.</info>',
+            count($legacyPackages),
+            count($legacyPackages) === 1 ? '' : 's',
+        ));
+        foreach ($legacyPackages as $pkg) {
+            $marker = isset($directSet[$pkg]) ? '<comment>(direct)</comment>' : '<comment>(transitive)</comment>';
+            $this->io->writeError(sprintf('  - %s  %s', $pkg, $marker));
+        }
+        $question = 'How should they be trusted on this first run?' . PHP_EOL
+            . '  [<comment>n</comment>] None — prompt for each package later (default, strict)' . PHP_EOL
+            . '  [<comment>d</comment>] Direct dependencies only — auto-trust packages your root composer.json explicitly requires' . PHP_EOL
+            . '  [<comment>a</comment>] All — auto-trust every existing skill package (including transitive)' . PHP_EOL
+            . '(defaults to <comment>n</comment>) [n,d,a]: ';
+
+        $answer = $this->io->ask($question, 'n');
+        if (!is_string($answer)) {
+            $answer = 'n';
+        }
+        $choice = strtolower(trim($answer));
+
+        $rules = match ($choice) {
+            'a' => array_fill_keys($legacyPackages, true),
+            'd' => array_fill_keys(array_values(array_filter($legacyPackages, static fn (string $p): bool => isset($directSet[$p]))), true),
+            default => [],
+        };
         $this->configRules = $rules;
         $this->persistFullMap($rules);
     }
