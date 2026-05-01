@@ -66,7 +66,7 @@ final class ListSkillsCommand extends BaseCommand
 
         $pending = 0;
         foreach ($skills as $skill) {
-            $state = $skill['trust_state'] ?? 'allowed';
+            $state = $skill['trust_state'];
             $tag = match ($state) {
                 'allowed' => '<fg=green>[allowed]</>',
                 'denied'  => '<fg=red>[denied]</>',

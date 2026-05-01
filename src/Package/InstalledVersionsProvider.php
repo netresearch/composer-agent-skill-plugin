@@ -20,6 +20,7 @@ final class InstalledVersionsProvider implements PackageProvider
 
             $composerJson = $installPath . DIRECTORY_SEPARATOR . 'composer.json';
             $type = 'library';
+            /** @var array<string, mixed> $extra */
             $extra = [];
 
             if (file_exists($composerJson)) {
@@ -28,7 +29,13 @@ final class InstalledVersionsProvider implements PackageProvider
                     $rawType = $data['type'] ?? null;
                     $type = is_string($rawType) ? $rawType : 'library';
                     $rawExtra = $data['extra'] ?? null;
-                    $extra = is_array($rawExtra) ? $rawExtra : [];
+                    if (is_array($rawExtra)) {
+                        foreach ($rawExtra as $key => $value) {
+                            if (is_string($key)) {
+                                $extra[$key] = $value;
+                            }
+                        }
+                    }
                 }
             }
 

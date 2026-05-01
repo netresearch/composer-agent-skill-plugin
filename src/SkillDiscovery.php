@@ -193,7 +193,7 @@ final class SkillDiscovery
         }
 
         $extra = $composerData['extra'] ?? [];
-        if (!isset($extra[self::EXTRA_KEY])) {
+        if (!is_array($extra) || !isset($extra[self::EXTRA_KEY])) {
             return [self::DEFAULT_SKILL_FILE];
         }
 
@@ -295,7 +295,16 @@ final class SkillDiscovery
             return null;
         }
 
-        $validation = $this->validateFrontmatter($frontmatter);
+        // Narrow to <string, mixed> shape — non-string keys would already fail validation
+        // but PHPStan needs the explicit narrowing to call validateFrontmatter().
+        $stringKeyed = [];
+        foreach ($frontmatter as $key => $value) {
+            if (is_string($key)) {
+                $stringKeyed[$key] = $value;
+            }
+        }
+
+        $validation = $this->validateFrontmatter($stringKeyed);
         if ($validation !== null) {
             $this->addWarning(
                 $packageName,
@@ -304,9 +313,16 @@ final class SkillDiscovery
             return null;
         }
 
+        // validateFrontmatter() already verified name and description are non-empty strings.
+        $name = $stringKeyed['name'];
+        $description = $stringKeyed['description'];
+        if (!is_string($name) || !is_string($description)) {
+            return null; // unreachable after validateFrontmatter, but PHPStan needs the narrow
+        }
+
         return [
-            'name' => $frontmatter['name'],
-            'description' => $frontmatter['description'],
+            'name' => $name,
+            'description' => $description,
         ];
     }
 

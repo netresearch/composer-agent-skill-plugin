@@ -153,8 +153,15 @@ final class SkillTrustManager
         if (!is_array($data)) {
             return false;
         }
-        return isset($data['extra'][self::EXTRA_KEY][self::ALLOW_SUB_KEY])
-            && is_array($data['extra'][self::EXTRA_KEY][self::ALLOW_SUB_KEY]);
+        $extra = $data['extra'] ?? null;
+        if (!is_array($extra)) {
+            return false;
+        }
+        $skillExtra = $extra[self::EXTRA_KEY] ?? null;
+        if (!is_array($skillExtra)) {
+            return false;
+        }
+        return isset($skillExtra[self::ALLOW_SUB_KEY]) && is_array($skillExtra[self::ALLOW_SUB_KEY]);
     }
 
     private function matchPattern(string $packageName): ?bool
@@ -188,7 +195,15 @@ final class SkillTrustManager
         if (!is_array($data)) {
             return $this->configRules = [];
         }
-        $rules = $data['extra'][self::EXTRA_KEY][self::ALLOW_SUB_KEY] ?? [];
+        $extra = $data['extra'] ?? null;
+        if (!is_array($extra)) {
+            return $this->configRules = [];
+        }
+        $skillExtra = $extra[self::EXTRA_KEY] ?? null;
+        if (!is_array($skillExtra)) {
+            return $this->configRules = [];
+        }
+        $rules = $skillExtra[self::ALLOW_SUB_KEY] ?? [];
         if (!is_array($rules)) {
             return $this->configRules = [];
         }
