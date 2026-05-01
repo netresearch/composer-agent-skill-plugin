@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Tests\Unit;
 
 use Composer\IO\IOInterface;
+use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use PHPUnit\Framework\TestCase;
 
@@ -29,6 +32,39 @@ final class SkillDiscoveryTest extends TestCase
         // This test would require actual package installation or mocking InstalledVersions
         // For now, we test the methods that can be tested without Composer runtime
         $this->assertInstanceOf(SkillDiscovery::class, $this->discovery);
+    }
+
+    public function testProviderDrivesIteration(): void
+    {
+        // When a PackageProvider is injected, discovery iterates packages from it.
+        // After the universal-discovery refactor, a library-typed package declaring
+        // extra.ai-agent-skill is picked up by declaresSkills().
+        $fixturePath = realpath(__DIR__ . '/../Fixtures/library-with-skill');
+        self::assertNotFalse($fixturePath);
+
+        $provider = new class ($fixturePath) implements PackageProvider {
+            public function __construct(private string $path)
+            {
+            }
+
+            public function iterAllPackages(): iterable
+            {
+                yield new PackageInfo(
+                    name: 'test/library-with-skill',
+                    installPath: $this->path,
+                    version: '1.0.0',
+                    type: 'library',
+                    extra: ['ai-agent-skill' => 'SKILL.md'],
+                );
+            }
+        };
+
+        $discovery = new SkillDiscovery($this->io, $provider);
+        $skills = $discovery->discoverAllSkills();
+
+        self::assertCount(1, $skills);
+        self::assertSame('library-bundled-skill', $skills[0]['name']);
+        self::assertSame('test/library-with-skill', $skills[0]['package']);
     }
 
     public function testDiscoverMultiSkillPackage(): void

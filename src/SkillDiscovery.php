@@ -6,14 +6,16 @@ namespace Netresearch\ComposerAgentSkillPlugin;
 
 use Composer\InstalledVersions;
 use Composer\IO\IOInterface;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
  * Discovers AI agent skills from installed Composer packages.
  *
- * Scans all packages with type "ai-agent-skill", reads their SKILL.md files,
- * validates frontmatter, and returns skill metadata for registration.
+ * Iterates all installed packages and selects those that declare skills
+ * (either via extra.ai-agent-skill or the legacy type: ai-agent-skill).
  */
 final class SkillDiscovery
 {
@@ -25,7 +27,8 @@ final class SkillDiscovery
     private array $warnings = [];
 
     public function __construct(
-        private readonly IOInterface $io
+        private readonly IOInterface $io,
+        private readonly ?PackageProvider $packages = null,
     ) {
     }
 
@@ -40,35 +43,34 @@ final class SkillDiscovery
         $skills = [];
         $skillNames = [];
 
-        $packageNames = InstalledVersions::getInstalledPackagesByType(self::TYPE_AI_AGENT_SKILL);
+        $iter = $this->packages !== null
+            ? $this->packages->iterAllPackages()
+            : $this->iterByType();
 
-        foreach ($packageNames as $packageName) {
-            $installPath = InstalledVersions::getInstallPath($packageName);
-            $version = InstalledVersions::getPrettyVersion($packageName);
-
-            if ($installPath === null || $version === null) {
+        foreach ($iter as $pkg) {
+            if (!$pkg->declaresSkills()) {
                 continue;
             }
 
-            $packageSkills = $this->discoverSkillsFromPackage($packageName, $installPath, $version);
+            $packageSkills = $this->discoverSkillsFromPackage($pkg->name, $pkg->installPath, $pkg->version);
 
             foreach ($packageSkills as $skill) {
                 // Handle duplicate skill names (last wins + warning)
                 if (isset($skillNames[$skill['name']])) {
                     $previousPackage = $skillNames[$skill['name']];
                     $this->addWarning(
-                        $packageName,
+                        $pkg->name,
                         sprintf(
                             "Duplicate skill name '%s' found. Previously defined in %s.\n" .
                             "                   Using skill from %s (last one wins).",
                             $skill['name'],
                             $previousPackage,
-                            $packageName
+                            $pkg->name
                         )
                     );
                 }
 
-                $skillNames[$skill['name']] = $packageName;
+                $skillNames[$skill['name']] = $pkg->name;
                 $skills[$skill['name']] = $skill;
             }
         }
@@ -78,6 +80,33 @@ final class SkillDiscovery
         // Return values sorted by name (array keys are already sorted due to how we build it)
         ksort($skills);
         return array_values($skills);
+    }
+
+    /**
+     * Legacy iteration path used when no PackageProvider is injected.
+     *
+     * Preserves backward compatibility for callers that haven't been updated
+     * to inject a provider — yields packages tagged type: ai-agent-skill via
+     * the static InstalledVersions API, plus their composer.json extra.
+     *
+     * @return iterable<PackageInfo>
+     */
+    private function iterByType(): iterable
+    {
+        foreach (InstalledVersions::getInstalledPackagesByType(self::TYPE_AI_AGENT_SKILL) as $name) {
+            $path = InstalledVersions::getInstallPath($name);
+            $version = InstalledVersions::getPrettyVersion($name);
+            if ($path === null || $version === null) {
+                continue;
+            }
+            yield new PackageInfo(
+                name: $name,
+                installPath: $path,
+                version: $version,
+                type: self::TYPE_AI_AGENT_SKILL,
+                extra: [],
+            );
+        }
     }
 
     /**
