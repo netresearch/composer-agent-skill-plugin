@@ -29,6 +29,12 @@ final class SkillTrustManagerTest extends TestCase
         if (file_exists($this->composerJsonPath)) {
             unlink($this->composerJsonPath);
         }
+        // The TrustStore deliberately keeps the lock sidecar — clean it up here.
+        foreach ((array) glob($this->rootDir . '/composer.json.skill-trust.*') as $f) {
+            if (is_string($f) && is_file($f)) {
+                @unlink($f);
+            }
+        }
         if (is_dir($this->rootDir)) {
             rmdir($this->rootDir);
         }

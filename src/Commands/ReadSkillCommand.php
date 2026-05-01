@@ -18,6 +18,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class ReadSkillCommand extends BaseCommand
 {
+    use CommandContextTrait;
+
     public function __construct(
         private readonly ?SkillDiscovery $discovery = null,
     ) {
@@ -47,15 +49,7 @@ final class ReadSkillCommand extends BaseCommand
 
         $discovery = $this->discovery;
         if ($discovery === null) {
-            $composer = $this->tryComposer();
-            if ($composer !== null) {
-                $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
-                $rootName = $composer->getPackage()->getName();
-            } else {
-                $cwd = getcwd();
-                $composerJsonPath = ($cwd !== false ? $cwd : sys_get_temp_dir()) . DIRECTORY_SEPARATOR . 'composer.json';
-                $rootName = null;
-            }
+            [$composerJsonPath, $rootName] = $this->resolveContext();
             $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
             $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
         }

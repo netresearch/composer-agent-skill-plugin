@@ -167,6 +167,11 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                 '<error>AI Agent Skill Plugin error: %s</error>',
                 $e->getMessage()
             ));
+            // Full stack trace under -v / -vv / -vvv so debugging doesn't
+            // require rebuilding the failure scenario.
+            if ($this->io->isVerbose()) {
+                $this->io->writeError((string) $e);
+            }
         }
     }
 }

@@ -90,6 +90,11 @@ final class TrustStore
      */
     public function saveAllowSkills(array $rules): void
     {
+        // If the lock can't be acquired (filesystem doesn't support flock,
+        // open_basedir blocks the sidecar file), warn loudly but proceed.
+        // Refusing the write would render trust persistence unusable on those
+        // setups; the race window is microseconds and the consequences are
+        // recoverable via `composer skills:trust …` at any time.
         $lockHandle = $this->acquireLock();
         try {
             $contents = is_file($this->composerJsonPath)
@@ -122,16 +127,26 @@ final class TrustStore
     }
 
     /**
-     * @return resource|null
+     * @return resource|null Locked file handle, or null if locking failed.
      */
     private function acquireLock(): mixed
     {
         $lockPath = $this->composerJsonPath . '.skill-trust.lock';
         $fp = @fopen($lockPath, 'c+');
         if ($fp === false) {
+            $this->io->writeError(sprintf(
+                '<warning>Could not open trust-store lock file %s; proceeding without cross-process locking.</warning>',
+                $lockPath,
+            ));
             return null;
         }
-        @flock($fp, LOCK_EX);
+        if (!@flock($fp, LOCK_EX)) {
+            $this->io->writeError(
+                '<warning>flock() failed on trust-store lock file (filesystem may not support locking); proceeding without cross-process locking.</warning>',
+            );
+            @fclose($fp);
+            return null;
+        }
         return $fp;
     }
 
@@ -145,7 +160,13 @@ final class TrustStore
         }
         @flock($handle, LOCK_UN);
         @fclose($handle);
-        @unlink($this->composerJsonPath . '.skill-trust.lock');
+        // Deliberately DO NOT unlink the lock file. If we did, this race opens:
+        //   1. Process A acquires lock, releases + unlinks.
+        //   2. Process B was waiting on the same inode; flock returns immediately
+        //      because the lock is gone — but the inode is also gone.
+        //   3. Process C creates a new lock file (new inode), locks it.
+        //   4. B and C now both think they hold "the" lock and write concurrently.
+        // Keeping the file is harmless (a few bytes) and removes the inode race.
     }
 
     private function readJson(): mixed

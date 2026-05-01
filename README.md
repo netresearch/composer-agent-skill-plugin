@@ -143,25 +143,15 @@ Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
 
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
-### Upgrading from v0.1.x
+### First-run policy (covers v0.1.x upgrades)
 
-If you upgrade from v0.1.x with `type: ai-agent-skill` packages already installed, the first install/update after the upgrade triggers a one-time prompt asking how to seed the trust map. Choose:
-
-- **`[n]`** (default) to auto-trust nothing — every package goes through the per-package prompt during the same install.
-- **`[d]`** to auto-trust only the dedicated skill packages your root `composer.json` directly requires; transitive ones still prompt per-package.
-- **`[a]`** to keep the v0.1.x default (every existing skill package auto-trusted) — fastest, widest trust surface.
-
-Non-interactive runs (`--no-interaction`, CI) default to `[n]` with a `composer skills:trust <package>` recovery line per affected package.
-
-### First-run policy for `type: ai-agent-skill` packages
-
-The first time the plugin runs in a project that already has `type: ai-agent-skill` packages installed, you'll see a one-time prompt asking how to handle them:
+The first time the plugin runs in a project that already has `type: ai-agent-skill` packages installed — typically a fresh install of those packages or an upgrade from v0.1.x where they were silently auto-trusted — you'll see a one-time prompt asking how to seed the trust map:
 
 ```
 The AI Agent Skill plugin found 3 existing skill packages that have not been authorized yet.
-  - vendor/skill-a   (direct)
-  - vendor/skill-b   (transitive)
-  - vendor/skill-c   (transitive)
+  - vendor/skill-a   (in your require)
+  - vendor/skill-b   (pulled in by another package)
+  - vendor/skill-c   (pulled in by another package)
 How should they be trusted on this first run?
   [n] None — prompt for each package later (default, strict)
   [d] Direct dependencies only — auto-trust packages your root composer.json explicitly requires
@@ -169,11 +159,11 @@ How should they be trusted on this first run?
 (defaults to n) [n,d,a]:
 ```
 
-- **`n` (default, recommended)**: nothing is auto-trusted. Each package goes through the per-package trust prompt during the same install.
-- **`d`**: only packages listed directly in your root `composer.json`'s `require`/`require-dev` are auto-trusted. Transitive skill packages still prompt.
-- **`a`**: every existing skill package is auto-trusted (the v0.1.x default — convenient but wider trust surface).
+- **`n` (default, recommended)** — nothing is auto-trusted. Each package goes through the per-package prompt during the same install.
+- **`d`** — only packages listed directly in your root `composer.json`'s `require`/`require-dev` are auto-trusted. Transitive skill packages still prompt.
+- **`a`** — every existing skill package is auto-trusted. This restores the v0.1.x behaviour at the user's explicit consent — fastest, widest trust surface.
 
-The choice is persisted by writing the resulting map to `extra.ai-agent-skill.allow-skills`, so the prompt only fires once. **In non-interactive mode** (`composer install --no-interaction`, CI), the policy defaults to `n` and a warning lists every affected package with the `composer skills:trust ...` recovery command. CI installs never silently expand trust on your behalf.
+The choice is persisted under `extra.ai-agent-skill.allow-skills`, so the prompt only fires once. In non-interactive mode (`composer install --no-interaction`, CI) the policy defaults to `n` and a warning lists every affected package with the `composer skills:trust ...` recovery command. CI installs never silently expand trust on your behalf.
 
 Library-bundled skills (`type: library` + `extra.ai-agent-skill`) are **not** part of this first-run policy — they always go through the per-package prompt because the user chose the library for its primary purpose, not to import skills.
 

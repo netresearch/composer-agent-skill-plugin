@@ -106,6 +106,11 @@ final class SkillDiscoveryTest extends TestCase
             self::assertSame(TrustState::Allowed, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
+            foreach ((array) glob($rootDir . '/composer.json.skill-trust.*') as $f) {
+                if (is_string($f) && is_file($f)) {
+                    @unlink($f);
+                }
+            }
             rmdir($rootDir);
         }
     }
@@ -136,6 +141,11 @@ final class SkillDiscoveryTest extends TestCase
             self::assertSame(TrustState::Pending, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
+            foreach ((array) glob($rootDir . '/composer.json.skill-trust.*') as $f) {
+                if (is_string($f) && is_file($f)) {
+                    @unlink($f);
+                }
+            }
             rmdir($rootDir);
         }
     }
@@ -163,6 +173,11 @@ final class SkillDiscoveryTest extends TestCase
             self::assertSame(TrustState::Denied, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
+            foreach ((array) glob($rootDir . '/composer.json.skill-trust.*') as $f) {
+                if (is_string($f) && is_file($f)) {
+                    @unlink($f);
+                }
+            }
             rmdir($rootDir);
         }
     }

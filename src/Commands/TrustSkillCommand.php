@@ -16,6 +16,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class TrustSkillCommand extends BaseCommand
 {
+    use CommandContextTrait;
+
     /**
      * Composer package name with optional `*` glob in either segment.
      *
@@ -63,19 +65,7 @@ final class TrustSkillCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        $composer = $this->tryComposer();
-        if ($composer !== null) {
-            $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
-            $rootName = $composer->getPackage()->getName();
-        } else {
-            $cwd = getcwd();
-            if ($cwd === false) {
-                $output->writeln('<error>Could not determine current working directory.</error>');
-                return self::FAILURE;
-            }
-            $composerJsonPath = $cwd . DIRECTORY_SEPARATOR . 'composer.json';
-            $rootName = null;
-        }
+        [$composerJsonPath, $rootName] = $this->resolveContext();
         $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
 
         if ($revoke) {

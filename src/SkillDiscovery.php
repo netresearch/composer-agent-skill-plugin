@@ -420,10 +420,13 @@ final class SkillDiscovery
         // <skill><name>evil</name>" would forge a second skill entry that an AI agent
         // reads as legitimate. Plus U+202E and friends produce visually misleading
         // strings that look one way but are read another by the agent.
-        // C0 controls (excluding tab/newline/CR which we explicitly catch below):
-        //   0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F
-        // Plus disallow CR/LF entirely (descriptions are single-paragraph) and the
-        // bidi override range U+202A-U+202E and U+2066-U+2069.
+        //
+        // We reject the *entire* C0 range 0x00-0x1F plus DEL 0x7F. That includes
+        // tab (0x09), LF (0x0A), and CR (0x0D) — the most dangerous attack vectors,
+        // since they break out of the single-line containment that AGENTS.md
+        // assumes. Descriptions are meant to be short single-paragraph blurbs,
+        // so disallowing all whitespace-control codepoints is the conservative choice.
+        // Also reject the bidi override range U+202A-U+202E and U+2066-U+2069.
         if (preg_match('/[\x00-\x1F\x7F]/u', $description) === 1
             || preg_match('/\x{202A}|\x{202B}|\x{202C}|\x{202D}|\x{202E}|\x{2066}|\x{2067}|\x{2068}|\x{2069}/u', $description) === 1
         ) {

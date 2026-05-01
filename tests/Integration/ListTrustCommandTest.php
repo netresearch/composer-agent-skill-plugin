@@ -29,6 +29,11 @@ final class ListTrustCommandTest extends TestCase
         if (file_exists($cj)) {
             unlink($cj);
         }
+        foreach ((array) glob($this->rootDir . '/composer.json.skill-trust.*') as $f) {
+            if (is_string($f) && is_file($f)) {
+                @unlink($f);
+            }
+        }
         if (is_dir($this->rootDir)) {
             rmdir($this->rootDir);
         }
