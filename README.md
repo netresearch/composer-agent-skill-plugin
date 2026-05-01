@@ -6,7 +6,7 @@ A Composer plugin that enables universal AI agent skill distribution and managem
 [![Tests](https://img.shields.io/badge/tests-31%20passing-success)](tests/)
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%208-success)](phpstan.neon)
 [![PHP Version](https://img.shields.io/badge/php-%5E8.4-blue)](composer.json)
-[![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.x%20%7C%207.x%20%7C%208.x-blue)](composer.json)
+[![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.4%20%7C%207.4%20%7C%208.0-blue)](composer.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## 🔌 Compatibility
