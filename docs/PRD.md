@@ -867,14 +867,33 @@ Discovery now iterates **all** installed packages and selects those that either:
 
 Broadening discovery means any transitive dependency could potentially register skills. To keep the security story intact, the plugin requires per-package opt-in before reading SKILL.md content for inclusion in `AGENTS.md` — the same shape Composer uses for `allow-plugins`:
 
-- **Interactive mode**: `[y,n,a,d]` prompt; `y`/`n` persist to `composer.json`, `a` is session-only, `d` discards.
-- **Non-interactive mode**: skip with a `composer config --json` hint (gentler than Composer's hard-fail; CI stays deterministic).
-- **Persistence**: `extra.ai-agent-skill.allow-skills` in the root `composer.json`. Glob patterns (`vendor/*`) supported via `BasePackage::packageNameToRegexp()`.
+- **Interactive mode**: `[y,n,a,d,?]` prompt; `y`/`n` persist to `composer.json`, `a` is session-only, `d` leaves undecided (re-prompts next run), `?` shows per-option help and re-prompts. The prompt embeds an inline `composer skills:trust …` recovery hint.
+- **Non-interactive mode**: skip with a `composer skills:trust <package>` hint (gentler than Composer's hard-fail; CI stays deterministic).
+- **Persistence**: `extra.ai-agent-skill.allow-skills` in the root `composer.json`. Atomic write via temp file + rename, with a sidecar `flock` file for cross-process safety. Glob patterns (`vendor/*`) supported via a case-sensitive matcher (Composer's `BasePackage::packageNameToRegexp()` always sets `/i`, which we deliberately don't use).
 - **Boundary**: only `SkillPlugin::updateAgentsMd()` — the install/update event handler — invokes `SkillTrustManager::decide()`. Discovery and reporting never prompt.
 
-### Auto-seeding for upgrades
+### First-run policy (replaces auto-seeding)
 
-To prevent a re-prompt avalanche when existing users upgrade, the plugin auto-seeds the `allow-skills` map on first run with the currently-installed `type: ai-agent-skill` packages. The user already chose to `composer require` those packages — implicit trust. Auto-seeding is a one-shot operation (skipped if the map already exists).
+When `extra.ai-agent-skill.allow-skills` is absent and the project has installed `type: ai-agent-skill` packages, a one-time prompt asks how to seed:
+
+- `[n] None` (default, strict) — every package goes through the per-package prompt.
+- `[d] Direct dependencies only` — auto-trust packages your root `composer.json` directly requires; transitives still prompt.
+- `[a] All` — auto-trust every existing skill package. Restores the v0.1.x behaviour at the user's explicit consent.
+
+Non-interactive mode defaults to `[n]` and emits a `composer skills:trust …` recovery hint per affected package, marked `(in your require)` or `(pulled in by another package)`. The map is always written (possibly empty) so this prompt fires at most once per project.
+
+The earlier prototype's blanket auto-seeding was replaced after the security review flagged it HIGH: a transitive dependency the user never knowingly chose got trust by default. Deny-by-default closes that vector while still allowing a single keystroke (`a`) to keep v0.1.x behaviour for users who want it.
+
+### Commands
+
+The plugin registers four Composer commands:
+
+| Command | Purpose | Mutates? |
+|---|---|---|
+| `composer list-skills` | List every discovered skill with trust state | No |
+| `composer read-skill <name>` | Print full SKILL.md content for one skill | No |
+| `composer skills:trust <package> [--deny\|--revoke]` | Persist a trust decision without prompting | Yes |
+| `composer skills:list-trust` | Show every persisted decision in the allow-skills map | No |
 
 ## Document History
 

@@ -71,12 +71,13 @@ Install any package with type `ai-agent-skill`:
 composer require vendor/database-analyzer-skill
 ```
 
-### 2. Skills Auto-Register
+### 2. Skills Auto-Register (after trust)
 
 The plugin automatically:
 - Discovers skill packages during `composer install` or `composer update`
-- Generates/updates `AGENTS.md` in your project root
-- Registers skills in XML format for AI agent consumption
+- **Asks once** before registering skills from a package it hasn't seen before — see [Trust Model](#trust-model)
+- Generates/updates `AGENTS.md` in your project root with the trusted skills
+- Registers them in XML format for AI agent consumption
 
 ### 3. Use Skills
 
@@ -103,8 +104,10 @@ Allow this package to register skills?
   [y] Yes — allow & persist (writes to composer.json)
   [n] No — deny & persist (suppress future prompts)
   [a] Allow for this session only
-  [d] Discard — do not allow, do not write
-(defaults to n) [y,n,a,d]:
+  [d] Discard — leave undecided, ask again next run
+  [?] Show details about this choice
+(change later with: composer skills:trust vendor/foo [--deny|--revoke])
+(defaults to n) [y,n,a,d,?]:
 ```
 
 Decisions persist under `extra.ai-agent-skill.allow-skills` in your root `composer.json`:
@@ -125,17 +128,18 @@ Decisions persist under `extra.ai-agent-skill.allow-skills` in your root `compos
 
 ### Managing trust decisions
 
-Use the dedicated `composer skills:trust` command (preferred):
+Use the dedicated commands (preferred):
 
 ```bash
 composer skills:trust vendor/foo            # allow & persist
 composer skills:trust vendor/foo --deny     # deny & persist
 composer skills:trust vendor/foo --revoke   # remove from the map (re-prompts next install)
+composer skills:list-trust                  # show every persisted decision
 ```
 
 Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
 
-> ⚠️ **Glob matching is case-insensitive and `*` matches any characters.** A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. A typo like `acme/sk*` would match a wide range of unrelated packages. Prefer explicit per-package entries when in doubt.
+> ⚠️ **Glob matching is case-sensitive and `*` matches any characters within a pattern segment.** Composer normalizes published package names to lowercase, so write trust patterns in lowercase. A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. Exact-string keys always override matching globs, even when the glob was added first. Prefer explicit per-package entries when in doubt.
 
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
@@ -143,9 +147,9 @@ In non-interactive mode (`composer install --no-interaction`, CI), packages with
 
 If you upgrade from v0.1.x with `type: ai-agent-skill` packages already installed, the first install/update after the upgrade triggers a one-time prompt asking how to seed the trust map. Choose:
 
-- **`[a]`** to keep the v0.1.x default (every existing skill package auto-trusted) — fastest, widest trust surface.
-- **`[d]`** to auto-trust only the dedicated skill packages your root `composer.json` directly requires; transitive ones still prompt per-package.
 - **`[n]`** (default) to auto-trust nothing — every package goes through the per-package prompt during the same install.
+- **`[d]`** to auto-trust only the dedicated skill packages your root `composer.json` directly requires; transitive ones still prompt per-package.
+- **`[a]`** to keep the v0.1.x default (every existing skill package auto-trusted) — fastest, widest trust surface.
 
 Non-interactive runs (`--no-interaction`, CI) default to `[n]` with a `composer skills:trust <package>` recovery line per affected package.
 

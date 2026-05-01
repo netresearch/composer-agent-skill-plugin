@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Root package is auto-trusted** — projects that ship their own `SKILL.md` no longer get prompted to authorize themselves.
 - `composer list-skills` now shows trust state (`[allowed]` / `[pending]` / `[denied]`) per skill and a footer count of pending packages. The command is purely informational and never prompts.
 - `composer skills:trust <package>` command — allow (`composer skills:trust vendor/foo`), deny (`--deny`), or revoke (`--revoke`) a trust decision without hand-editing `composer.json`. Used as the recovery path for accidental denies and as the canonical fix for non-interactive failures.
+- `composer skills:list-trust` command — read-only inventory of every persisted decision in `extra.ai-agent-skill.allow-skills`, with `[allowed]` / `[denied]` and `(exact)` / `(glob)` markers per entry. Companion to `skills:trust`; never prompts, never mutates.
+- Trust prompt mirrors Composer's plugin prompt shape (`y`/`n`/`a`/`d`/`?`). The `?` answer shows per-option help and re-prompts. The prompt also includes an inline `composer skills:trust <package>` recovery hint so users have an on-screen breadcrumb if they pick `n` by accident.
 - `composer read-skill` now shows trust state in the header and warns when reading content from a pending or denied skill (which is not registered in `AGENTS.md`).
 - `SkillTrustManager`, `PackageProvider`, `InstalledVersionsProvider`, `PackageInfo`, and `TrustDecision` abstractions for testability.
 
