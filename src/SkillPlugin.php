@@ -12,7 +12,6 @@ use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
-use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 
 /**
  * Main plugin class for AI Agent Skill management.
