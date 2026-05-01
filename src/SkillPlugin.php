@@ -156,7 +156,11 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                     count($result->pending) === 1 ? '' : 's'
                 ));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Catch \Throwable (not \Exception) so PHP 8 \Error subclasses
+            // like \ValueError (e.g. NUL byte in a path arg) don't bubble out
+            // and abort the entire composer install. The plugin's failure
+            // should never block dependency installation.
             $this->io->writeError(sprintf(
                 '<error>AI Agent Skill Plugin error: %s</error>',
                 $e->getMessage()

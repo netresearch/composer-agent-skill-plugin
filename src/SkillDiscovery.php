@@ -165,20 +165,30 @@ final class SkillDiscovery
 
             // Defense-in-depth: even after rejecting '..' segments, a symlink inside
             // the package could point outside it. Verify the resolved file is rooted
-            // at the resolved package directory.
+            // at the resolved package directory. Fail CLOSED — if either realpath()
+            // returns false (broken symlink, open_basedir, permission denied),
+            // we skip rather than allow an unverified path through.
             $resolvedFile = realpath($absolutePath);
-            if ($packageRealPath !== false && $resolvedFile !== false) {
-                $boundary = $packageRealPath . DIRECTORY_SEPARATOR;
-                if (!str_starts_with($resolvedFile . DIRECTORY_SEPARATOR, $boundary)) {
-                    $this->addWarning(
-                        $packageName,
-                        sprintf(
-                            "Skill path '%s' resolves outside the package directory (symlink escape).",
-                            $relativePath
-                        )
-                    );
-                    continue;
-                }
+            if ($packageRealPath === false || $resolvedFile === false) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Skill path '%s' could not be resolved for safety check (broken symlink or restricted filesystem). Skipping.",
+                        $relativePath
+                    )
+                );
+                continue;
+            }
+            $boundary = $packageRealPath . DIRECTORY_SEPARATOR;
+            if (!str_starts_with($resolvedFile . DIRECTORY_SEPARATOR, $boundary)) {
+                $this->addWarning(
+                    $packageName,
+                    sprintf(
+                        "Skill path '%s' resolves outside the package directory (symlink escape).",
+                        $relativePath
+                    )
+                );
+                continue;
             }
 
             $skillData = $this->parseSkillFile($packageName, $absolutePath, $relativePath);
