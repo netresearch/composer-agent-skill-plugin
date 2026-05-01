@@ -12,7 +12,7 @@
     }
   ],
   "require": {
-    "php": "^8.4.1",
+    "php": "^8.4",
     "composer-plugin-api": "2.2.*|^2.9",
     "symfony/yaml": "^5.4|^6.0|^7.0|^8.0",
     "symfony/console": "^5.4|^6.0|^7.0|^8.0"
