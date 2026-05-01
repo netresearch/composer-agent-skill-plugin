@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use Composer\IO\IOInterface;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
+use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -29,13 +30,19 @@ final class SkillDiscovery
     public function __construct(
         private readonly IOInterface $io,
         private readonly ?PackageProvider $packages = null,
+        private readonly ?SkillTrustManager $trust = null,
     ) {
     }
 
     /**
      * Discover all skills from installed packages.
      *
-     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string}>
+     * Pure: never prompts, never mutates state. Each returned skill carries
+     * a trust_state field (allowed / denied / pending) populated by reading
+     * the trust manager — but no prompt is fired. Gating happens at the
+     * install/update boundary in SkillPlugin::updateAgentsMd().
+     *
+     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: string}>
      */
     public function discoverAllSkills(): array
     {
@@ -53,8 +60,11 @@ final class SkillDiscovery
             }
 
             $packageSkills = $this->discoverSkillsFromPackage($pkg->name, $pkg->installPath, $pkg->version);
+            $trustState = $this->resolveTrustState($pkg->name);
 
             foreach ($packageSkills as $skill) {
+                $skill['trust_state'] = $trustState;
+
                 // Handle duplicate skill names (last wins + warning)
                 if (isset($skillNames[$skill['name']])) {
                     $previousPackage = $skillNames[$skill['name']];
@@ -80,6 +90,17 @@ final class SkillDiscovery
         // Return values sorted by name (array keys are already sorted due to how we build it)
         ksort($skills);
         return array_values($skills);
+    }
+
+    private function resolveTrustState(string $packageName): string
+    {
+        if ($this->trust === null) {
+            return 'allowed'; // legacy callers without a trust manager get the old behavior
+        }
+        if (!$this->trust->hasDecision($packageName)) {
+            return 'pending';
+        }
+        return $this->trust->isAllowed($packageName) ? 'allowed' : 'denied';
     }
 
     /**

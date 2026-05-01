@@ -34,30 +34,46 @@ final class SkillDiscoveryTest extends TestCase
         $this->assertInstanceOf(SkillDiscovery::class, $this->discovery);
     }
 
-    public function testProviderDrivesIteration(): void
+    /**
+     * @return PackageProvider
+     */
+    private function singlePackageProvider(string $name, string $type, array $extra): PackageProvider
     {
-        // When a PackageProvider is injected, discovery iterates packages from it.
-        // After the universal-discovery refactor, a library-typed package declaring
-        // extra.ai-agent-skill is picked up by declaresSkills().
         $fixturePath = realpath(__DIR__ . '/../Fixtures/library-with-skill');
         self::assertNotFalse($fixturePath);
 
-        $provider = new class ($fixturePath) implements PackageProvider {
-            public function __construct(private string $path)
-            {
+        return new class ($name, $fixturePath, $type, $extra) implements PackageProvider {
+            /**
+             * @param array<string, mixed> $extra
+             */
+            public function __construct(
+                private string $name,
+                private string $path,
+                private string $type,
+                private array $extra,
+            ) {
             }
 
             public function iterAllPackages(): iterable
             {
                 yield new PackageInfo(
-                    name: 'test/library-with-skill',
+                    name: $this->name,
                     installPath: $this->path,
                     version: '1.0.0',
-                    type: 'library',
-                    extra: ['ai-agent-skill' => 'SKILL.md'],
+                    type: $this->type,
+                    extra: $this->extra,
                 );
             }
         };
+    }
+
+    public function testProviderDrivesIteration(): void
+    {
+        $provider = $this->singlePackageProvider(
+            'test/library-with-skill',
+            'library',
+            ['ai-agent-skill' => 'SKILL.md'],
+        );
 
         $discovery = new SkillDiscovery($this->io, $provider);
         $skills = $discovery->discoverAllSkills();
@@ -65,6 +81,113 @@ final class SkillDiscoveryTest extends TestCase
         self::assertCount(1, $skills);
         self::assertSame('library-bundled-skill', $skills[0]['name']);
         self::assertSame('test/library-with-skill', $skills[0]['package']);
+    }
+
+    public function testTrustStateAnnotatedAllowedWhenTrusted(): void
+    {
+        $provider = $this->singlePackageProvider(
+            'allowed/pkg',
+            'library',
+            ['ai-agent-skill' => 'SKILL.md'],
+        );
+
+        $rootDir = sys_get_temp_dir() . '/discovery-trust-allowed-' . uniqid();
+        mkdir($rootDir);
+        file_put_contents($rootDir . '/composer.json', (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['allowed/pkg' => true]]],
+        ]));
+
+        try {
+            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+                new \Composer\IO\BufferIO(),
+                $rootDir,
+            );
+            $discovery = new SkillDiscovery($this->io, $provider, $trust);
+            $skills = $discovery->discoverAllSkills();
+
+            self::assertCount(1, $skills);
+            self::assertSame('allowed', $skills[0]['trust_state']);
+        } finally {
+            unlink($rootDir . '/composer.json');
+            rmdir($rootDir);
+        }
+    }
+
+    public function testTrustStateAnnotatedPendingWithoutPrompt(): void
+    {
+        // Discovery is pure: even unknown packages are returned with trust_state=pending.
+        // The non-interactive IO would normally cause decide() to skip — we must NOT call decide() here.
+        $provider = $this->singlePackageProvider(
+            'unknown/pkg',
+            'library',
+            ['ai-agent-skill' => 'SKILL.md'],
+        );
+
+        $rootDir = sys_get_temp_dir() . '/discovery-pending-' . uniqid();
+        mkdir($rootDir);
+        file_put_contents($rootDir . '/composer.json', "{\n}\n");
+
+        try {
+            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+                new \Composer\IO\BufferIO(), // non-interactive by default
+                $rootDir,
+            );
+            $discovery = new SkillDiscovery($this->io, $provider, $trust);
+            $skills = $discovery->discoverAllSkills();
+
+            self::assertCount(1, $skills, 'Discovery must include pending skills, not skip them');
+            self::assertSame('pending', $skills[0]['trust_state']);
+        } finally {
+            unlink($rootDir . '/composer.json');
+            rmdir($rootDir);
+        }
+    }
+
+    public function testTrustStateAnnotatedDeniedWhenExplicitlyDenied(): void
+    {
+        $provider = $this->singlePackageProvider(
+            'denied/pkg',
+            'library',
+            ['ai-agent-skill' => 'SKILL.md'],
+        );
+
+        $rootDir = sys_get_temp_dir() . '/discovery-denied-' . uniqid();
+        mkdir($rootDir);
+        file_put_contents($rootDir . '/composer.json', (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['denied/pkg' => false]]],
+        ]));
+
+        try {
+            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager(
+                new \Composer\IO\BufferIO(),
+                $rootDir,
+            );
+            $discovery = new SkillDiscovery($this->io, $provider, $trust);
+            $skills = $discovery->discoverAllSkills();
+
+            self::assertCount(1, $skills);
+            self::assertSame('denied', $skills[0]['trust_state']);
+        } finally {
+            unlink($rootDir . '/composer.json');
+            rmdir($rootDir);
+        }
+    }
+
+    public function testTrustStateDefaultsToAllowedWhenNoTrustManager(): void
+    {
+        // Backward compatibility: callers without a trust manager get the legacy behavior
+        // — every discovered skill is treated as allowed.
+        $provider = $this->singlePackageProvider(
+            'legacy/caller',
+            'library',
+            ['ai-agent-skill' => 'SKILL.md'],
+        );
+
+        $discovery = new SkillDiscovery($this->io, $provider);
+        $skills = $discovery->discoverAllSkills();
+
+        self::assertCount(1, $skills);
+        self::assertSame('allowed', $skills[0]['trust_state']);
     }
 
     public function testDiscoverMultiSkillPackage(): void

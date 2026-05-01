@@ -81,45 +81,80 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     }
 
     /**
-     * Update AGENTS.md with discovered skills.
+     * Update AGENTS.md with discovered (and trusted) skills.
      *
-     * Called automatically after composer install/update.
+     * Called automatically after composer install/update. This is the only
+     * place where SkillTrustManager::decide() may prompt the user — pure
+     * discovery (used by `composer list-skills`) never triggers prompts.
      */
     public function updateAgentsMd(Event $event): void
     {
         try {
-            // Discover all skills from installed packages
-            $discovery = new SkillDiscovery($this->io);
-            $skills = $discovery->discoverAllSkills();
-
-            // Generate and update AGENTS.md
-            $generator = new AgentsMdGenerator();
             $projectRoot = getcwd();
             if ($projectRoot === false) {
                 throw new \RuntimeException('Could not determine project root directory.');
             }
 
-            $agentsMdPath = $projectRoot . DIRECTORY_SEPARATOR . 'AGENTS.md';
-            $generator->updateAgentsMd($agentsMdPath, $skills);
+            $provider = new \Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider();
+            $trust = new \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager($this->io, $projectRoot);
 
-            // Output success message
-            $skillCount = count($skills);
+            // Auto-seed: existing type: ai-agent-skill packages are implicitly trusted
+            // on first run. The user already chose to `composer require` them, so
+            // re-prompting on every legacy package would be more surprising than allowing.
+            $legacyPackages = [];
+            foreach ($provider->iterAllPackages() as $pkg) {
+                if ($pkg->type === 'ai-agent-skill') {
+                    $legacyPackages[] = $pkg->name;
+                }
+            }
+            $trust->seedIfAbsent($legacyPackages);
+
+            $discovery = new SkillDiscovery($this->io, $provider, $trust);
+            $allSkills = $discovery->discoverAllSkills();
+
+            // Gate: prompt only for pending entries; drop denied ones.
+            $allowedSkills = [];
+            $pendingPackages = [];
+            foreach ($allSkills as $skill) {
+                if ($skill['trust_state'] === 'allowed') {
+                    $allowedSkills[] = $skill;
+                    continue;
+                }
+                if ($skill['trust_state'] === 'denied') {
+                    continue;
+                }
+                // pending — call decide() (the only place that may prompt)
+                if ($trust->decide($skill['package'])) {
+                    $allowedSkills[] = $skill;
+                } else {
+                    $pendingPackages[$skill['package']] = true;
+                }
+            }
+
+            $generator = new AgentsMdGenerator();
+            $agentsMdPath = $projectRoot . DIRECTORY_SEPARATOR . 'AGENTS.md';
+            $generator->updateAgentsMd($agentsMdPath, $allowedSkills);
+
+            $skillCount = count($allowedSkills);
             if ($skillCount > 0) {
-                $this->io->write(
-                    sprintf(
-                        '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
-                        $skillCount,
-                        $skillCount === 1 ? '' : 's'
-                    )
-                );
+                $this->io->write(sprintf(
+                    '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
+                    $skillCount,
+                    $skillCount === 1 ? '' : 's'
+                ));
+            }
+            if (count($pendingPackages) > 0) {
+                $this->io->write(sprintf(
+                    '<comment>%d package%s not registered (trust pending). Run composer install interactively to be prompted.</comment>',
+                    count($pendingPackages),
+                    count($pendingPackages) === 1 ? '' : 's'
+                ));
             }
         } catch (\Exception $e) {
-            $this->io->writeError(
-                sprintf(
-                    '<error>AI Agent Skill Plugin error: %s</error>',
-                    $e->getMessage()
-                )
-            );
+            $this->io->writeError(sprintf(
+                '<error>AI Agent Skill Plugin error: %s</error>',
+                $e->getMessage()
+            ));
         }
     }
 }
