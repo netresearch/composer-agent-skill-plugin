@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Trust;
 
 use Composer\IO\IOInterface;
+use Composer\Json\JsonManipulator;
 use Composer\Package\BasePackage;
 
 final class SkillTrustManager
@@ -38,6 +39,122 @@ final class SkillTrustManager
             return $this->sessionRules[$packageName];
         }
         return $this->matchPattern($packageName) === true;
+    }
+
+    /**
+     * Resolve trust for a package, prompting the user if the decision is unknown.
+     *
+     * Only call from the install/update boundary — never from informational paths
+     * like `composer list-skills`. Mirrors Composer's PluginManager pattern.
+     */
+    public function decide(string $packageName): bool
+    {
+        if ($this->hasDecision($packageName)) {
+            return $this->isAllowed($packageName);
+        }
+
+        if (!$this->io->isInteractive()) {
+            $this->io->writeError(sprintf(
+                '<warning>Skipping skills from "%s" — package is not in extra.ai-agent-skill.allow-skills.</warning>',
+                $packageName,
+            ));
+            $this->io->writeError(sprintf(
+                '  Run: <info>composer config --json extra.ai-agent-skill.allow-skills \'{"%s": true}\'</info>',
+                $packageName,
+            ));
+            return false;
+        }
+
+        return $this->prompt($packageName);
+    }
+
+    /**
+     * Seed allow-skills with currently-installed packages.
+     *
+     * Skipped if the map already exists. Used to auto-trust legacy
+     * type: ai-agent-skill packages on first upgrade — the user already
+     * chose to require them.
+     *
+     * @param iterable<string> $packageNames
+     */
+    public function seedIfAbsent(iterable $packageNames): void
+    {
+        if ($this->configMapExists()) {
+            return;
+        }
+        $rules = [];
+        foreach ($packageNames as $name) {
+            $rules[$name] = true;
+        }
+        if ($rules === []) {
+            return;
+        }
+        $this->configRules = $rules;
+        $this->persistFullMap($rules);
+    }
+
+    private function prompt(string $packageName): bool
+    {
+        $question = sprintf(
+            'Package "<info>%s</info>" wants to register AI agent skills.' . PHP_EOL
+            . 'Skills are instructions an AI agent will follow in your project.' . PHP_EOL
+            . 'Allow this package to register skills?' . PHP_EOL
+            . '  [<comment>y</comment>] Yes — allow & persist (writes to composer.json)' . PHP_EOL
+            . '  [<comment>n</comment>] No — deny & persist (suppress future prompts)' . PHP_EOL
+            . '  [<comment>a</comment>] Allow for this session only' . PHP_EOL
+            . '  [<comment>d</comment>] Discard — do not allow, do not write' . PHP_EOL
+            . '(defaults to <comment>n</comment>) [y,n,a,d]: ',
+            $packageName,
+        );
+
+        $answer = $this->io->ask($question, 'n');
+        if (!is_string($answer)) {
+            $answer = 'n';
+        }
+        $decision = TrustDecision::fromAnswer($answer) ?? TrustDecision::Deny;
+
+        if ($decision->isPersistent()) {
+            $allow = $decision === TrustDecision::Allow;
+            $rules = $this->loadConfigRules();
+            $rules[$packageName] = $allow;
+            $this->configRules = $rules;
+            $this->persistFullMap($rules);
+        } else {
+            $this->sessionRules[$packageName] = $decision->grantsAccess();
+        }
+
+        return $decision->grantsAccess();
+    }
+
+    /**
+     * Rewrite the entire allow-skills map atomically.
+     *
+     * @param array<string, bool> $rules
+     */
+    private function persistFullMap(array $rules): void
+    {
+        $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
+        if (!is_file($path)) {
+            return;
+        }
+        $contents = (string) file_get_contents($path);
+        $manipulator = new JsonManipulator($contents);
+        $manipulator->addSubNode('extra', self::EXTRA_KEY, [self::ALLOW_SUB_KEY => $rules]);
+        file_put_contents($path, $manipulator->getContents());
+    }
+
+    private function configMapExists(): bool
+    {
+        $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
+        if (!is_file($path)) {
+            return false;
+        }
+        $data = json_decode((string) file_get_contents($path), true);
+        if (!is_array($data)) {
+            return false;
+        }
+        return isset($data['extra'][self::EXTRA_KEY][self::ALLOW_SUB_KEY])
+            && is_array($data['extra'][self::EXTRA_KEY][self::ALLOW_SUB_KEY]);
     }
 
     private function matchPattern(string $packageName): ?bool

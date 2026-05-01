@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Tests\Unit\Trust;
 
 use Composer\IO\BufferIO;
+use Composer\IO\IOInterface;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use PHPUnit\Framework\TestCase;
 
@@ -114,5 +115,145 @@ final class SkillTrustManagerTest extends TestCase
 
         self::assertTrue($mgr->hasDecision('vendor/good'));
         self::assertFalse($mgr->hasDecision('vendor/bad'));
+    }
+
+    public function testDecideRespectsExistingAllow(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/foo' => true]]],
+        ]));
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+
+        self::assertTrue($mgr->decide('vendor/foo'));
+    }
+
+    public function testDecideRespectsExistingDeny(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/foo' => false]]],
+        ]));
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+
+        self::assertFalse($mgr->decide('vendor/foo'));
+    }
+
+    public function testDecideNonInteractiveSkipsAndWarns(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $io = new BufferIO();
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+
+        self::assertFalse($mgr->decide('vendor/new'));
+
+        $output = $io->getOutput();
+        self::assertStringContainsString('vendor/new', $output);
+        self::assertStringContainsString('composer config', $output);
+    }
+
+    private function interactiveIo(string $answer): IOInterface
+    {
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn($answer);
+        return $io;
+    }
+
+    public function testDecideInteractiveAllowPersistsToComposerJson(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
+
+        self::assertTrue($mgr->decide('vendor/foo'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(['vendor/foo' => true], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testDecideInteractiveDenyPersistsAsFalse(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $mgr = new SkillTrustManager($this->interactiveIo('n'), $this->rootDir);
+
+        self::assertFalse($mgr->decide('vendor/bar'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(['vendor/bar' => false], $data['extra']['ai-agent-skill']['allow-skills']);
+    }
+
+    public function testDecideInteractiveSessionAllowDoesNotWriteFile(): void
+    {
+        $original = "{\n}\n";
+        file_put_contents($this->composerJsonPath, $original);
+        $mgr = new SkillTrustManager($this->interactiveIo('a'), $this->rootDir);
+
+        self::assertTrue($mgr->decide('vendor/baz'));
+        self::assertSame($original, file_get_contents($this->composerJsonPath));
+        self::assertTrue($mgr->isAllowed('vendor/baz')); // session cache
+    }
+
+    public function testDecideInteractiveDiscardDoesNotWriteOrAllow(): void
+    {
+        $original = "{\n}\n";
+        file_put_contents($this->composerJsonPath, $original);
+        $mgr = new SkillTrustManager($this->interactiveIo('d'), $this->rootDir);
+
+        self::assertFalse($mgr->decide('vendor/qux'));
+        self::assertSame($original, file_get_contents($this->composerJsonPath));
+        self::assertFalse($mgr->isAllowed('vendor/qux'));
+    }
+
+    public function testDecidePersistAddsToExistingMap(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/old' => true]]],
+        ], JSON_PRETTY_PRINT));
+        $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
+
+        self::assertTrue($mgr->decide('vendor/new'));
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(
+            ['vendor/old' => true, 'vendor/new' => true],
+            $data['extra']['ai-agent-skill']['allow-skills'],
+        );
+    }
+
+    public function testSeedIfAbsentWritesMap(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        $mgr->seedIfAbsent(['vendor/legacy-a', 'vendor/legacy-b']);
+
+        $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
+        self::assertIsArray($data);
+        self::assertSame(true, $data['extra']['ai-agent-skill']['allow-skills']['vendor/legacy-a']);
+        self::assertSame(true, $data['extra']['ai-agent-skill']['allow-skills']['vendor/legacy-b']);
+    }
+
+    public function testSeedIfAbsentSkipsWhenMapPresent(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['vendor/foo' => true]]],
+        ], JSON_PRETTY_PRINT));
+        $original = (string) file_get_contents($this->composerJsonPath);
+
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        $mgr->seedIfAbsent(['vendor/should-not-appear']);
+
+        self::assertSame($original, file_get_contents($this->composerJsonPath));
+    }
+
+    public function testSeedIfAbsentWithNoLegacyPackagesDoesNothing(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $original = (string) file_get_contents($this->composerJsonPath);
+
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+        $mgr->seedIfAbsent([]);
+
+        self::assertSame($original, file_get_contents($this->composerJsonPath));
     }
 }
