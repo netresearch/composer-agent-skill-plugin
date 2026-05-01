@@ -440,6 +440,23 @@ final class SkillDiscovery
             return sprintf("Description exceeds maximum length of 1024 characters (%d chars).", strlen($description));
         }
 
+        // SECURITY: reject control characters and bidi overrides in the description.
+        // The description is rendered into AGENTS.md inside <description>...</description>
+        // tags via htmlspecialchars(ENT_XML1|ENT_QUOTES) — but htmlspecialchars does NOT
+        // strip newlines or control chars. A description containing "\n</description>\n
+        // <skill><name>evil</name>" would forge a second skill entry that an AI agent
+        // reads as legitimate. Plus U+202E and friends produce visually misleading
+        // strings that look one way but are read another by the agent.
+        // C0 controls (excluding tab/newline/CR which we explicitly catch below):
+        //   0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F
+        // Plus disallow CR/LF entirely (descriptions are single-paragraph) and the
+        // bidi override range U+202A-U+202E and U+2066-U+2069.
+        if (preg_match('/[\x00-\x1F\x7F]/u', $description) === 1
+            || preg_match('/\x{202A}|\x{202B}|\x{202C}|\x{202D}|\x{202E}|\x{2066}|\x{2067}|\x{2068}|\x{2069}/u', $description) === 1
+        ) {
+            return 'Description contains control characters or bidi-override codepoints.';
+        }
+
         return null;
     }
 
