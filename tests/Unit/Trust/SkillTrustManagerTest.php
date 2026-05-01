@@ -187,6 +187,47 @@ final class SkillTrustManagerTest extends TestCase
         self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Denied, $mgr->decide('vendor/foo'));
     }
 
+    public function testInteractivePromptIncludesRecoveryHint(): void
+    {
+        // The per-package prompt should mention skills:trust so users have an
+        // on-screen breadcrumb even if they pick `n` and want to reverse.
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $captured = '';
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturnCallback(function (string $q) use (&$captured): string {
+            $captured = $q;
+            return 'n';
+        });
+
+        $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
+        $mgr->decide('vendor/foo');
+
+        self::assertStringContainsString('change later', $captured);
+        self::assertStringContainsString('composer skills:trust vendor/foo', $captured);
+        self::assertStringContainsString('[y,n,a,d,?]', $captured);
+    }
+
+    public function testInteractivePromptHelpLoop(): void
+    {
+        // Picking '?' must show details and re-prompt (matching Composer's
+        // PluginManager pattern), not be parsed as a deny.
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $answers = ['?', 'y'];
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturnCallback(function () use (&$answers): string {
+            return array_shift($answers);
+        });
+
+        $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
+        $state = $mgr->decide('vendor/foo');
+
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $state);
+        // Both answers consumed
+        self::assertSame([], $answers);
+    }
+
     public function testDecideDiscardStaysPendingNotDenied(): void
     {
         // 'd' Discard should NOT persist any decision and should NOT register a
