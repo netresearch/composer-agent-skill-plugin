@@ -108,7 +108,9 @@ final class SkillDiscovery
      *
      * Preserves backward compatibility for callers that haven't been updated
      * to inject a provider — yields packages tagged type: ai-agent-skill via
-     * the static InstalledVersions API, plus their composer.json extra.
+     * the static InstalledVersions API. This fallback path does not read each
+     * package's composer.json, so PackageInfo::extra is always empty and
+     * skill paths fall back to the SKILL.md root convention.
      *
      * @return iterable<PackageInfo>
      */

@@ -114,6 +114,7 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
 
             // Gate: prompt only for pending entries; drop denied ones.
             $allowedSkills = [];
+            $deniedPackages = [];
             $pendingPackages = [];
             foreach ($allSkills as $skill) {
                 if ($skill['trust_state'] === 'allowed') {
@@ -121,11 +122,16 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                     continue;
                 }
                 if ($skill['trust_state'] === 'denied') {
+                    $deniedPackages[$skill['package']] = true;
                     continue;
                 }
-                // pending — call decide() (the only place that may prompt)
+                // pending — call decide() (the only place that may prompt).
+                // After decide() we re-check the trust state so a freshly persisted
+                // 'n' (deny) gets counted as denied, not pending.
                 if ($trust->decide($skill['package'])) {
                     $allowedSkills[] = $skill;
+                } elseif ($trust->hasDecision($skill['package']) && !$trust->isAllowed($skill['package'])) {
+                    $deniedPackages[$skill['package']] = true;
                 } else {
                     $pendingPackages[$skill['package']] = true;
                 }
@@ -141,6 +147,13 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                     '<info>AI Agent Skills updated: %d skill%s registered in AGENTS.md</info>',
                     $skillCount,
                     $skillCount === 1 ? '' : 's'
+                ));
+            }
+            if (count($deniedPackages) > 0) {
+                $this->io->write(sprintf(
+                    '<comment>%d package%s not registered (trust denied).</comment>',
+                    count($deniedPackages),
+                    count($deniedPackages) === 1 ? '' : 's'
                 ));
             }
             if (count($pendingPackages) > 0) {
