@@ -129,6 +129,8 @@ Glob patterns (`vendor/*`) are supported. Pre-authorize a package non-interactiv
 composer config --json --merge extra.ai-agent-skill.allow-skills '{"vendor/foo": true}'
 ```
 
+> ⚠️ **Glob matching is case-insensitive and `*` matches any characters.** A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. A typo like `acme/sk*` would match a wide range of unrelated packages. Prefer explicit per-package entries when in doubt.
+
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
 ### Auto-seeding for `type: ai-agent-skill` packages
