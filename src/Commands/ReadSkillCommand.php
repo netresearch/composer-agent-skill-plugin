@@ -93,9 +93,10 @@ final class ReadSkillCommand extends BaseCommand
         $trustState = $foundSkill['trust_state'];
         if ($trustState === 'pending') {
             $output->writeln('<comment>Trust:   pending — this skill is NOT registered in AGENTS.md.</comment>');
-            $output->writeln(sprintf('<comment>         Run `composer install` interactively or pre-authorize: composer config --json --merge extra.ai-agent-skill.allow-skills \'{"%s": true}\'</comment>', $foundSkill['package']));
+            $output->writeln(sprintf('<comment>         Allow: composer skills:trust %s</comment>', $foundSkill['package']));
         } elseif ($trustState === 'denied') {
             $output->writeln('<comment>Trust:   denied — this skill is explicitly blocked from AGENTS.md.</comment>');
+            $output->writeln(sprintf('<comment>         Reverse: composer skills:trust %s</comment>', $foundSkill['package']));
         }
         $output->writeln('');
 

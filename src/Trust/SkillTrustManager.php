@@ -59,13 +59,48 @@ final class SkillTrustManager
                 $packageName,
             ));
             $this->io->writeError(sprintf(
-                '  Run: <info>composer config --json --merge extra.ai-agent-skill.allow-skills \'{"%s": true}\'</info>',
+                '  Allow: <info>composer skills:trust %s</info>',
+                $packageName,
+            ));
+            $this->io->writeError(sprintf(
+                '  Deny:  <info>composer skills:trust %s --deny</info>',
                 $packageName,
             ));
             return false;
         }
 
         return $this->prompt($packageName);
+    }
+
+    /**
+     * Explicitly persist a decision without prompting.
+     *
+     * Used by the `composer skills:trust` command. Always writes to
+     * composer.json regardless of prior state.
+     */
+    public function setExplicit(string $packageName, bool $allow): void
+    {
+        $rules = $this->loadConfigRules();
+        $rules[$packageName] = $allow;
+        $this->configRules = $rules;
+        $this->persistFullMap($rules);
+    }
+
+    /**
+     * Remove a package's persisted decision.
+     *
+     * If the package isn't in the map this is a no-op.
+     */
+    public function revoke(string $packageName): bool
+    {
+        $rules = $this->loadConfigRules();
+        if (!array_key_exists($packageName, $rules)) {
+            return false;
+        }
+        unset($rules[$packageName]);
+        $this->configRules = $rules;
+        $this->persistFullMap($rules);
+        return true;
     }
 
     /**

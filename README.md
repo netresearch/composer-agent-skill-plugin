@@ -123,15 +123,21 @@ Decisions persist under `extra.ai-agent-skill.allow-skills` in your root `compos
 }
 ```
 
-Glob patterns (`vendor/*`) are supported. Pre-authorize a package non-interactively (slashes in the package name require the `--json` form so Composer doesn't interpret them as nested keys; `--merge` preserves any existing entries instead of replacing the whole map):
+### Managing trust decisions
+
+Use the dedicated `composer skills:trust` command (preferred):
 
 ```bash
-composer config --json --merge extra.ai-agent-skill.allow-skills '{"vendor/foo": true}'
+composer skills:trust vendor/foo            # allow & persist
+composer skills:trust vendor/foo --deny     # deny & persist
+composer skills:trust vendor/foo --revoke   # remove from the map (re-prompts next install)
 ```
+
+Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
 
 > ⚠️ **Glob matching is case-insensitive and `*` matches any characters.** A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. A typo like `acme/sk*` would match a wide range of unrelated packages. Prefer explicit per-package entries when in doubt.
 
-In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
+In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. The warning suggests `composer skills:trust <package>` so CI failures are one command away from a fix. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
 ### Auto-seeding for `type: ai-agent-skill` packages
 

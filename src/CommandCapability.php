@@ -7,6 +7,7 @@ namespace Netresearch\ComposerAgentSkillPlugin;
 use Composer\Plugin\Capability\CommandProvider;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ListSkillsCommand;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ReadSkillCommand;
+use Netresearch\ComposerAgentSkillPlugin\Commands\TrustSkillCommand;
 
 final class CommandCapability implements CommandProvider
 {
@@ -20,6 +21,7 @@ final class CommandCapability implements CommandProvider
         return [
             new ListSkillsCommand(),
             new ReadSkillCommand(),
+            new TrustSkillCommand(),
         ];
     }
 }
