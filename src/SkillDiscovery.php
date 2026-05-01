@@ -9,6 +9,7 @@ use Composer\IO\IOInterface;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -42,7 +43,7 @@ final class SkillDiscovery
      * the trust manager — but no prompt is fired. Gating happens at the
      * install/update boundary in SkillPlugin::updateAgentsMd().
      *
-     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: string}>
+     * @return array<int, array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
      */
     public function discoverAllSkills(): array
     {
@@ -92,15 +93,15 @@ final class SkillDiscovery
         return array_values($skills);
     }
 
-    private function resolveTrustState(string $packageName): string
+    private function resolveTrustState(string $packageName): TrustState
     {
         if ($this->trust === null) {
-            return 'allowed'; // legacy callers without a trust manager get the old behavior
+            return TrustState::Allowed; // legacy callers without a trust manager get the old behavior
         }
         if (!$this->trust->hasDecision($packageName)) {
-            return 'pending';
+            return TrustState::Pending;
         }
-        return $this->trust->isAllowed($packageName) ? 'allowed' : 'denied';
+        return $this->trust->isAllowed($packageName) ? TrustState::Allowed : TrustState::Denied;
     }
 
     /**

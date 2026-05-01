@@ -9,6 +9,7 @@ use Composer\IO\ConsoleIO;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputArgument;
@@ -91,10 +92,10 @@ final class ReadSkillCommand extends BaseCommand
         $output->writeln(sprintf('Base Directory: %s', $foundSkill['location']));
 
         $trustState = $foundSkill['trust_state'];
-        if ($trustState === 'pending') {
+        if ($trustState === TrustState::Pending) {
             $output->writeln('<comment>Trust:   pending — this skill is NOT registered in AGENTS.md.</comment>');
             $output->writeln(sprintf('<comment>         Allow: composer skills:trust %s</comment>', $foundSkill['package']));
-        } elseif ($trustState === 'denied') {
+        } elseif ($trustState === TrustState::Denied) {
             $output->writeln('<comment>Trust:   denied — this skill is explicitly blocked from AGENTS.md.</comment>');
             $output->writeln(sprintf('<comment>         Reverse: composer skills:trust %s</comment>', $foundSkill['package']));
         }

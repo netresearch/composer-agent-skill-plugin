@@ -9,6 +9,7 @@ use Composer\IO\ConsoleIO;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
@@ -67,12 +68,7 @@ final class ListSkillsCommand extends BaseCommand
         $pending = 0;
         foreach ($skills as $skill) {
             $state = $skill['trust_state'];
-            $tag = match ($state) {
-                'allowed' => '<fg=green>[allowed]</>',
-                'denied'  => '<fg=red>[denied]</>',
-                default   => '<fg=yellow>[pending]</>',
-            };
-            if ($state === 'pending') {
+            if ($state === TrustState::Pending) {
                 $pending++;
             }
             $output->writeln(sprintf(
@@ -80,7 +76,7 @@ final class ListSkillsCommand extends BaseCommand
                 $skill['name'],
                 $skill['package'],
                 $skill['version'],
-                $tag,
+                $state->tag(),
             ));
         }
 

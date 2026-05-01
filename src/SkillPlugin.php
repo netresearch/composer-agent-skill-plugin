@@ -12,6 +12,7 @@ use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 
 /**
  * Main plugin class for AI Agent Skill management.
@@ -117,11 +118,11 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             $deniedPackages = [];
             $pendingPackages = [];
             foreach ($allSkills as $skill) {
-                if ($skill['trust_state'] === 'allowed') {
+                if ($skill['trust_state'] === TrustState::Allowed) {
                     $allowedSkills[] = $skill;
                     continue;
                 }
-                if ($skill['trust_state'] === 'denied') {
+                if ($skill['trust_state'] === TrustState::Denied) {
                     $deniedPackages[$skill['package']] = true;
                     continue;
                 }

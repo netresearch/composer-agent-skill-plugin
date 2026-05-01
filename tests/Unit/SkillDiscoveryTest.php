@@ -8,6 +8,7 @@ use Composer\IO\IOInterface;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
+use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -105,7 +106,7 @@ final class SkillDiscoveryTest extends TestCase
             $skills = $discovery->discoverAllSkills();
 
             self::assertCount(1, $skills);
-            self::assertSame('allowed', $skills[0]['trust_state']);
+            self::assertSame(TrustState::Allowed, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
             rmdir($rootDir);
@@ -135,7 +136,7 @@ final class SkillDiscoveryTest extends TestCase
             $skills = $discovery->discoverAllSkills();
 
             self::assertCount(1, $skills, 'Discovery must include pending skills, not skip them');
-            self::assertSame('pending', $skills[0]['trust_state']);
+            self::assertSame(TrustState::Pending, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
             rmdir($rootDir);
@@ -165,7 +166,7 @@ final class SkillDiscoveryTest extends TestCase
             $skills = $discovery->discoverAllSkills();
 
             self::assertCount(1, $skills);
-            self::assertSame('denied', $skills[0]['trust_state']);
+            self::assertSame(TrustState::Denied, $skills[0]['trust_state']);
         } finally {
             unlink($rootDir . '/composer.json');
             rmdir($rootDir);
@@ -186,7 +187,7 @@ final class SkillDiscoveryTest extends TestCase
         $skills = $discovery->discoverAllSkills();
 
         self::assertCount(1, $skills);
-        self::assertSame('allowed', $skills[0]['trust_state']);
+        self::assertSame(TrustState::Allowed, $skills[0]['trust_state']);
     }
 
     public function testDiscoverMultiSkillPackage(): void
