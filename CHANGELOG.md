@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+## [2.0.0] - 2026-05-01
+
 ### Breaking changes
 
 > **First-run trust default changed from "auto-trust everything" to "deny by default".**
@@ -47,6 +55,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SkillDiscovery::discoverAllSkills()` is now pure — it enumerates every declared skill with a `trust_state` field but never prompts. Gating happens at the install/update boundary in `SkillPlugin::updateAgentsMd()` only.
 - Non-interactive `composer install` now skips untrusted skill packages with a `composer config --json` hint instead of registering them silently.
 - PHPStan level bumped from 8 to 10 (max).
+
+## [1.1.5] - 2026-04-20
+
+### Changed
+- Dependency updates via Renovate: `step-security/harden-runner` v2.17.0–2.19.0, `actions/cache` digest refresh, `dependabot/fetch-metadata` v3.x, `codecov/codecov-action` v6.
+
+## [1.1.4] - 2026-03-20
+
+### Security
+- **GitHub Actions hardening** ([#31](https://github.com/netresearch/composer-agent-skill-plugin/pull/31)): SHA-pin all third-party actions and add Dependabot for the `github-actions` ecosystem so action updates ship as reviewable PRs rather than floating tags.
+
+### Changed
+- Dependency updates via Renovate: `step-security/harden-runner` v2.15.0–v2.16.0, `shivammathur/setup-php` digest refresh, `codecov/codecov-action` digest refresh.
+
+## [1.1.3] - 2026-02-09
+
+### Added
+- **"Agent Skills" branding and cross-platform compatibility** ([#10](https://github.com/netresearch/composer-agent-skill-plugin/pull/10)).
+- **Auto-merge workflow** for vetted dependency updates.
+- **Renovate** configuration ([#1](https://github.com/netresearch/composer-agent-skill-plugin/pull/1)).
+
+### Security
+- **Pinned GitHub Actions to commit SHAs** with explicit per-job permissions ([#2](https://github.com/netresearch/composer-agent-skill-plugin/pull/2)).
+
+### Changed
+- **PHPUnit upgraded to v13** ([#21](https://github.com/netresearch/composer-agent-skill-plugin/pull/21)) — breaking-change adaptations in the test suite.
+- Multiple Renovate-driven action and digest updates: `step-security/harden-runner` v2.14.0–2.14.2, `actions/checkout` v6.0.2, `actions/cache` digest refreshes, `dependabot/fetch-metadata` v2.5.0.
 
 ## [1.1.2] - 2025-11-26
 
