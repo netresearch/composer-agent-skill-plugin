@@ -123,17 +123,22 @@ Decisions persist under `extra.ai-agent-skill.allow-skills` in your root `compos
 }
 ```
 
-Glob patterns (`vendor/*`) are supported. Pre-authorize a package non-interactively (slashes in the package name require the `--json` form so Composer doesn't interpret them as nested keys):
+Glob patterns (`vendor/*`) are supported. Pre-authorize a package non-interactively (slashes in the package name require the `--json` form so Composer doesn't interpret them as nested keys; `--merge` preserves any existing entries instead of replacing the whole map):
 
 ```bash
-composer config --json extra.ai-agent-skill.allow-skills '{"vendor/foo": true}'
+composer config --json --merge extra.ai-agent-skill.allow-skills '{"vendor/foo": true}'
 ```
 
 In non-interactive mode (`composer install --no-interaction`, CI), packages without an explicit decision are skipped with a warning — the plugin never auto-trusts on your behalf. `composer list-skills` shows the trust state per skill (`[allowed]` / `[pending]` / `[denied]`) without firing prompts.
 
-### Migrating from earlier versions
+### Auto-seeding for `type: ai-agent-skill` packages
 
-If you already had `type: ai-agent-skill` packages installed before upgrading, the first run after upgrade will **auto-seed** them as trusted. Reasoning: you already chose to `composer require` them, so denying their skills retroactively would be more surprising than allowing. The seeded entries appear in `extra.ai-agent-skill.allow-skills` and you can flip any of them to `false` later.
+The first time the plugin runs, if `extra.ai-agent-skill.allow-skills` is absent it auto-seeds entries for every currently-installed package whose `type` is `ai-agent-skill`. Rationale: you already chose to `composer require` those dedicated skill packages — they exist for one reason — so re-prompting would be more surprising than allowing. This applies to:
+
+- **Upgrades**: existing installations don't get a re-prompt avalanche on first run after the plugin update.
+- **Fresh installs**: a `composer require some/skill-package` immediately followed by an install does not prompt for that package.
+
+The seeded entries appear in your root `composer.json` and you can flip any of them to `false` afterwards. Auto-seeding is one-shot — once the map exists it's never touched again automatically. Library-bundled skills (`type: library` + `extra.ai-agent-skill`) are **not** auto-seeded; they always go through the prompt because the user chose the library for its primary purpose, not to import skills.
 
 ## Usage
 

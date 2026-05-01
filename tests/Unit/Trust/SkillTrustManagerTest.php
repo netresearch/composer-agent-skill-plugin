@@ -148,6 +148,8 @@ final class SkillTrustManagerTest extends TestCase
         $output = $io->getOutput();
         self::assertStringContainsString('vendor/new', $output);
         self::assertStringContainsString('composer config', $output);
+        // --merge prevents the second invocation from clobbering the first.
+        self::assertStringContainsString('--merge', $output);
     }
 
     private function interactiveIo(string $answer): IOInterface

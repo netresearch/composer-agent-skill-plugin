@@ -59,7 +59,7 @@ final class SkillTrustManager
                 $packageName,
             ));
             $this->io->writeError(sprintf(
-                '  Run: <info>composer config --json extra.ai-agent-skill.allow-skills \'{"%s": true}\'</info>',
+                '  Run: <info>composer config --json --merge extra.ai-agent-skill.allow-skills \'{"%s": true}\'</info>',
                 $packageName,
             ));
             return false;
