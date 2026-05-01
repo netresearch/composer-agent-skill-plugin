@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Netresearch\ComposerAgentSkillPlugin;
 
-use Composer\InstalledVersions;
 use Composer\IO\IOInterface;
-use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
+use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
@@ -21,18 +20,25 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class SkillDiscovery
 {
-    private const TYPE_AI_AGENT_SKILL = 'ai-agent-skill';
     private const DEFAULT_SKILL_FILE = 'SKILL.md';
     private const EXTRA_KEY = 'ai-agent-skill';
 
     /** @var array<int, string> */
     private array $warnings = [];
 
+    private readonly PackageProvider $packages;
+
     public function __construct(
         private readonly IOInterface $io,
-        private readonly ?PackageProvider $packages = null,
+        ?PackageProvider $packages = null,
         private readonly ?SkillTrustManager $trust = null,
     ) {
+        // Default to the InstalledVersions-backed provider so production
+        // callers don't have to wire one explicitly. The legacy iterByType()
+        // fallback (which read packages by type from InstalledVersions and
+        // returned them with empty extra) is gone — it was only reachable in
+        // tests after every command was wired with a provider.
+        $this->packages = $packages ?? new InstalledVersionsProvider();
     }
 
     /**
@@ -51,11 +57,7 @@ final class SkillDiscovery
         $skills = [];
         $skillNames = [];
 
-        $iter = $this->packages !== null
-            ? $this->packages->iterAllPackages()
-            : $this->iterByType();
-
-        foreach ($iter as $pkg) {
+        foreach ($this->packages->iterAllPackages() as $pkg) {
             if (!$pkg->declaresSkills()) {
                 continue;
             }
@@ -102,35 +104,6 @@ final class SkillDiscovery
             return TrustState::Pending;
         }
         return $this->trust->isAllowed($packageName) ? TrustState::Allowed : TrustState::Denied;
-    }
-
-    /**
-     * Legacy iteration path used when no PackageProvider is injected.
-     *
-     * Preserves backward compatibility for callers that haven't been updated
-     * to inject a provider — yields packages tagged type: ai-agent-skill via
-     * the static InstalledVersions API. This fallback path does not read each
-     * package's composer.json, so PackageInfo::extra is always empty and
-     * skill paths fall back to the SKILL.md root convention.
-     *
-     * @return iterable<PackageInfo>
-     */
-    private function iterByType(): iterable
-    {
-        foreach (InstalledVersions::getInstalledPackagesByType(self::TYPE_AI_AGENT_SKILL) as $name) {
-            $path = InstalledVersions::getInstallPath($name);
-            $version = InstalledVersions::getPrettyVersion($name);
-            if ($path === null || $version === null) {
-                continue;
-            }
-            yield new PackageInfo(
-                name: $name,
-                installPath: $path,
-                version: $version,
-                type: self::TYPE_AI_AGENT_SKILL,
-                extra: [],
-            );
-        }
     }
 
     /**

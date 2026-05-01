@@ -113,19 +113,11 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             $rootRequires = $composer->getPackage()->getRequires();
             $rootDevRequires = $composer->getPackage()->getDevRequires();
             $directNames = array_merge(array_keys($rootRequires), array_keys($rootDevRequires));
-            $directSet = array_fill_keys($directNames, true);
-
-            $legacyPackages = [];
-            $directLegacy = [];
-            foreach ($provider->iterAllPackages() as $pkg) {
-                if ($pkg->type === 'ai-agent-skill') {
-                    $legacyPackages[] = $pkg->name;
-                    if (isset($directSet[$pkg->name])) {
-                        $directLegacy[] = $pkg->name;
-                    }
-                }
-            }
-            $trust->applyFirstRunPolicy($legacyPackages, $directLegacy);
+            $firstRunInput = \Netresearch\ComposerAgentSkillPlugin\Trust\FirstRunInput::buildForFirstRun(
+                $provider,
+                $directNames,
+            );
+            $trust->applyFirstRunPolicy($firstRunInput);
 
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
             $allSkills = $discovery->discoverAllSkills();

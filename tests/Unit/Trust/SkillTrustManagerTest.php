@@ -6,6 +6,9 @@ namespace Netresearch\ComposerAgentSkillPlugin\Tests\Unit\Trust;
 
 use Composer\IO\BufferIO;
 use Composer\IO\IOInterface;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageInfo;
+use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
+use Netresearch\ComposerAgentSkillPlugin\Trust\FirstRunInput;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use PHPUnit\Framework\TestCase;
 
@@ -217,6 +220,33 @@ final class SkillTrustManagerTest extends TestCase
         self::assertStringContainsString('composer skills:trust', $output);
     }
 
+    /**
+     * Build a FirstRunInput from a list of [packageName, isDirect] pairs.
+     *
+     * @param list<array{0: string, 1: bool}> $packages
+     */
+    private function firstRunInput(array $packages): FirstRunInput
+    {
+        $provider = new class ($packages) implements PackageProvider {
+            /** @param list<array{0: string, 1: bool}> $entries */
+            public function __construct(private array $entries)
+            {
+            }
+
+            public function iterAllPackages(): iterable
+            {
+                foreach ($this->entries as [$name, $_]) {
+                    yield new PackageInfo($name, '/tmp', '1.0.0', 'ai-agent-skill', []);
+                }
+            }
+        };
+        $directs = array_values(array_map(
+            static fn (array $p): string => $p[0],
+            array_filter($packages, static fn (array $p): bool => $p[1]),
+        ));
+        return FirstRunInput::buildForFirstRun($provider, $directs);
+    }
+
     private function interactiveIo(string $answer): IOInterface
     {
         $io = $this->createStub(IOInterface::class);
@@ -296,7 +326,7 @@ final class SkillTrustManagerTest extends TestCase
         $original = (string) file_get_contents($this->composerJsonPath);
 
         $mgr = SkillTrustManager::forComposerJson(new BufferIO(), $this->composerJsonPath);
-        $mgr->applyFirstRunPolicy(['vendor/should-not-appear'], []);
+        $mgr->applyFirstRunPolicy($this->firstRunInput([['vendor/should-not-appear', true]]));
 
         self::assertSame($original, file_get_contents($this->composerJsonPath));
     }
@@ -307,10 +337,10 @@ final class SkillTrustManagerTest extends TestCase
         $io = new BufferIO();
         $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
 
-        $mgr->applyFirstRunPolicy(
-            legacyPackages: ['vendor/legacy-a', 'vendor/legacy-b'],
-            directDependencies: ['vendor/legacy-a'],
-        );
+        $mgr->applyFirstRunPolicy($this->firstRunInput([
+            ['vendor/legacy-a', true],
+            ['vendor/legacy-b', false],
+        ]));
 
         // Map written as empty so we don't ask again.
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
@@ -332,7 +362,7 @@ final class SkillTrustManagerTest extends TestCase
         $io->method('ask')->willReturn('n');
 
         $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
-        $mgr->applyFirstRunPolicy(['vendor/legacy-a'], ['vendor/legacy-a']);
+        $mgr->applyFirstRunPolicy($this->firstRunInput([['vendor/legacy-a', true]]));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertSame([], $data['extra']['ai-agent-skill']['allow-skills']);
@@ -346,10 +376,10 @@ final class SkillTrustManagerTest extends TestCase
         $io->method('ask')->willReturn('d');
 
         $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
-        $mgr->applyFirstRunPolicy(
-            legacyPackages: ['vendor/direct', 'vendor/transitive'],
-            directDependencies: ['vendor/direct'],
-        );
+        $mgr->applyFirstRunPolicy($this->firstRunInput([
+            ['vendor/direct', true],
+            ['vendor/transitive', false],
+        ]));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertSame(
@@ -366,10 +396,10 @@ final class SkillTrustManagerTest extends TestCase
         $io->method('ask')->willReturn('a');
 
         $mgr = SkillTrustManager::forComposerJson($io, $this->composerJsonPath);
-        $mgr->applyFirstRunPolicy(
-            legacyPackages: ['vendor/direct', 'vendor/transitive'],
-            directDependencies: ['vendor/direct'],
-        );
+        $mgr->applyFirstRunPolicy($this->firstRunInput([
+            ['vendor/direct', true],
+            ['vendor/transitive', false],
+        ]));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertSame(
@@ -403,7 +433,7 @@ final class SkillTrustManagerTest extends TestCase
         $original = (string) file_get_contents($this->composerJsonPath);
 
         $mgr = SkillTrustManager::forComposerJson(new BufferIO(), $this->composerJsonPath);
-        $mgr->applyFirstRunPolicy([], []);
+        $mgr->applyFirstRunPolicy($this->firstRunInput([]));
 
         self::assertSame($original, file_get_contents($this->composerJsonPath));
     }

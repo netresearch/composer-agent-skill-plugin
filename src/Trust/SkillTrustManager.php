@@ -121,28 +121,23 @@ final class SkillTrustManager
     /**
      * Decide first-run trust policy for legacy `type: ai-agent-skill` packages.
      *
-     * Runs only if the allow-skills map is absent and there are legacy packages
-     * to consider. See README "First-run policy".
-     *
-     * @param list<string> $legacyPackages    Installed packages with type:ai-agent-skill
-     * @param list<string> $directDependencies Subset directly required by root composer.json
+     * Runs only if the allow-skills map is absent and the input is non-empty.
+     * See README "First-run policy".
      */
-    public function applyFirstRunPolicy(array $legacyPackages, array $directDependencies): void
+    public function applyFirstRunPolicy(FirstRunInput $input): void
     {
         if ($this->store->allowSkillsExists()) {
             return;
         }
-        if ($legacyPackages === []) {
+        if ($input->isEmpty()) {
             return;
         }
-
-        $directSet = array_fill_keys($directDependencies, true);
 
         if (!$this->io->isInteractive()) {
             $this->io->writeError('<comment>The AI Agent Skill plugin found pre-existing skill packages but no trust decisions yet.</comment>');
             $this->io->writeError('<comment>Defaulting to deny-all in non-interactive mode. Authorize each one explicitly:</comment>');
-            foreach ($legacyPackages as $pkg) {
-                $marker = isset($directSet[$pkg]) ? '(in your require)' : '(pulled in by another package)';
+            foreach ($input->legacyPackages as $pkg) {
+                $marker = $input->isDirect($pkg) ? '(in your require)' : '(pulled in by another package)';
                 $this->io->writeError(sprintf('  <info>composer skills:trust %s</info>  %s', $pkg, $marker));
             }
             $this->configRules = [];
@@ -150,13 +145,16 @@ final class SkillTrustManager
             return;
         }
 
+        $count = count($input->legacyPackages);
         $this->io->writeError(sprintf(
             '<info>The AI Agent Skill plugin found %d existing skill package%s that have not been authorized yet.</info>',
-            count($legacyPackages),
-            count($legacyPackages) === 1 ? '' : 's',
+            $count,
+            $count === 1 ? '' : 's',
         ));
-        foreach ($legacyPackages as $pkg) {
-            $marker = isset($directSet[$pkg]) ? '<comment>(in your require)</comment>' : '<comment>(pulled in by another package)</comment>';
+        foreach ($input->legacyPackages as $pkg) {
+            $marker = $input->isDirect($pkg)
+                ? '<comment>(in your require)</comment>'
+                : '<comment>(pulled in by another package)</comment>';
             $this->io->writeError(sprintf('  - %s  %s', $pkg, $marker));
         }
         $question = 'How should they be trusted on this first run?' . PHP_EOL
@@ -172,8 +170,8 @@ final class SkillTrustManager
         $choice = strtolower(trim($answer));
 
         $rules = match ($choice) {
-            'a' => array_fill_keys($legacyPackages, true),
-            'd' => array_fill_keys(array_values(array_filter($legacyPackages, static fn (string $p): bool => isset($directSet[$p]))), true),
+            'a' => array_fill_keys($input->legacyPackages, true),
+            'd' => array_fill_keys($input->directOnly(), true),
             default => [],
         };
         $this->configRules = $rules;
