@@ -166,7 +166,13 @@ final class SkillTrustManager
     private function mergeWithExisting(string $composerJsonContents, array $rules): array
     {
         $data = json_decode($composerJsonContents, true);
-        $existing = is_array($data) ? ($data['extra'][self::EXTRA_KEY] ?? null) : null;
+        $existing = null;
+        if (is_array($data)) {
+            $extra = $data['extra'] ?? null;
+            if (is_array($extra)) {
+                $existing = $extra[self::EXTRA_KEY] ?? null;
+            }
+        }
 
         $merged = [];
 

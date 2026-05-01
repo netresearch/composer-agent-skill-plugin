@@ -6,7 +6,9 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
+use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
+use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputArgument;
@@ -15,6 +17,12 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class ReadSkillCommand extends BaseCommand
 {
+    public function __construct(
+        private readonly ?SkillDiscovery $discovery = null,
+    ) {
+        parent::__construct();
+    }
+
     protected function configure(): void
     {
         $this
@@ -36,8 +44,15 @@ final class ReadSkillCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        // Discover skills
-        $discovery = new SkillDiscovery($io);
+        $discovery = $this->discovery;
+        if ($discovery === null) {
+            $rootDir = getcwd();
+            if ($rootDir === false) {
+                $rootDir = sys_get_temp_dir();
+            }
+            $trust = new SkillTrustManager($io, $rootDir);
+            $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
+        }
         $skills = $discovery->discoverAllSkills();
 
         // Find the requested skill
@@ -74,6 +89,14 @@ final class ReadSkillCommand extends BaseCommand
         $output->writeln(sprintf('Reading: %s', $foundSkill['name']));
         $output->writeln(sprintf('Package: %s v%s', $foundSkill['package'], $foundSkill['version']));
         $output->writeln(sprintf('Base Directory: %s', $foundSkill['location']));
+
+        $trustState = $foundSkill['trust_state'];
+        if ($trustState === 'pending') {
+            $output->writeln('<comment>Trust:   pending — this skill is NOT registered in AGENTS.md.</comment>');
+            $output->writeln(sprintf('<comment>         Run `composer install` interactively or pre-authorize: composer config --json --merge extra.ai-agent-skill.allow-skills \'{"%s": true}\'</comment>', $foundSkill['package']));
+        } elseif ($trustState === 'denied') {
+            $output->writeln('<comment>Trust:   denied — this skill is explicitly blocked from AGENTS.md.</comment>');
+        }
         $output->writeln('');
 
         // Read and display full SKILL.md content
