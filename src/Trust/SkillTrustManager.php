@@ -149,9 +149,23 @@ final class SkillTrustManager
 
         $manipulator = new JsonManipulator($contents);
         $manipulator->addSubNode('extra', self::EXTRA_KEY, $merged);
-        if (@file_put_contents($path, $manipulator->getContents()) === false) {
+        $newContents = $manipulator->getContents();
+
+        // Write atomically: write to a sibling temp file then rename. Avoids leaving
+        // a partially-written composer.json if the process is killed mid-write and
+        // narrows the TOCTOU window with parallel composer.json writers.
+        $tempPath = $path . '.skill-trust.' . bin2hex(random_bytes(8));
+        if (@file_put_contents($tempPath, $newContents) === false) {
             $this->io->writeError(sprintf(
                 '<error>Failed to write trust decisions to %s. Check file permissions.</error>',
+                $path,
+            ));
+            return;
+        }
+        if (!@rename($tempPath, $path)) {
+            @unlink($tempPath);
+            $this->io->writeError(sprintf(
+                '<error>Failed to atomically replace %s with trust decisions.</error>',
                 $path,
             ));
         }

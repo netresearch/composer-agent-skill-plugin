@@ -295,9 +295,11 @@ final class SkillTrustManagerTest extends TestCase
 
     public function testWriteFailureEmitsWarning(): void
     {
-        // Make composer.json read-only so file_put_contents fails.
+        // Make the rootDir read-only so the atomic-write temp file creation fails.
+        // (Just chmod-ing composer.json isn't enough — rename can still replace a
+        // read-only target if the directory is writable.)
         file_put_contents($this->composerJsonPath, "{\n}\n");
-        chmod($this->composerJsonPath, 0o444);
+        chmod($this->rootDir, 0o555);
 
         $io = $this->createStub(IOInterface::class);
         $io->method('isInteractive')->willReturn(true);
@@ -311,7 +313,7 @@ final class SkillTrustManagerTest extends TestCase
         $mgr->decide('vendor/foo');
 
         // Restore writability before tearDown unlinks.
-        chmod($this->composerJsonPath, 0o644);
+        chmod($this->rootDir, 0o755);
 
         $combined = implode("\n", $messages);
         self::assertStringContainsString('Failed to write', $combined);
