@@ -6,7 +6,6 @@ namespace Netresearch\ComposerAgentSkillPlugin\Trust;
 
 use Composer\IO\IOInterface;
 use Composer\Json\JsonManipulator;
-use Composer\Package\BasePackage;
 
 final class SkillTrustManager
 {
@@ -53,11 +52,14 @@ final class SkillTrustManager
      *
      * Only call from the install/update boundary — never from informational paths
      * like `composer list-skills`. Mirrors Composer's PluginManager pattern.
+     *
+     * Returns the resolved {@see TrustState} so callers don't need to re-query
+     * hasDecision()/isAllowed() afterwards.
      */
-    public function decide(string $packageName): bool
+    public function decide(string $packageName): TrustState
     {
         if ($this->hasDecision($packageName)) {
-            return $this->isAllowed($packageName);
+            return $this->isAllowed($packageName) ? TrustState::Allowed : TrustState::Denied;
         }
 
         if (!$this->io->isInteractive()) {
@@ -73,7 +75,7 @@ final class SkillTrustManager
                 '  Deny:  <info>composer skills:trust %s --deny</info>',
                 $packageName,
             ));
-            return false;
+            return TrustState::Pending;
         }
 
         return $this->prompt($packageName);
@@ -180,7 +182,7 @@ final class SkillTrustManager
         $this->persistFullMap($rules);
     }
 
-    private function prompt(string $packageName): bool
+    private function prompt(string $packageName): TrustState
     {
         $question = sprintf(
             'Package "<info>%s</info>" wants to register AI agent skills.' . PHP_EOL
@@ -200,17 +202,29 @@ final class SkillTrustManager
         }
         $decision = TrustDecision::fromAnswer($answer) ?? TrustDecision::Deny;
 
-        if ($decision->isPersistent()) {
-            $allow = $decision === TrustDecision::Allow;
-            $rules = $this->loadConfigRules();
-            $rules[$packageName] = $allow;
-            $this->configRules = $rules;
-            $this->persistFullMap($rules);
-        } else {
-            $this->sessionRules[$packageName] = $decision->grantsAccess();
-        }
+        return match ($decision) {
+            TrustDecision::Allow => $this->persistAndReturn($packageName, true),
+            TrustDecision::Deny  => $this->persistAndReturn($packageName, false),
+            TrustDecision::SessionAllow => $this->sessionAllow($packageName),
+            // Discard: no persist, no session entry — package stays pending and
+            // will re-prompt next run.
+            TrustDecision::Discard => TrustState::Pending,
+        };
+    }
 
-        return $decision->grantsAccess();
+    private function persistAndReturn(string $packageName, bool $allow): TrustState
+    {
+        $rules = $this->loadConfigRules();
+        $rules[$packageName] = $allow;
+        $this->configRules = $rules;
+        $this->persistFullMap($rules);
+        return $allow ? TrustState::Allowed : TrustState::Denied;
+    }
+
+    private function sessionAllow(string $packageName): TrustState
+    {
+        $this->sessionRules[$packageName] = true;
+        return TrustState::Allowed;
     }
 
     /**
@@ -296,6 +310,19 @@ final class SkillTrustManager
         return $merged;
     }
 
+    /**
+     * Convert a trust-map pattern to a case-sensitive regex.
+     *
+     * Composer package names are normalized to lowercase, so case-insensitive
+     * matching (which Composer's BasePackage::packageNameToRegexp produces) would
+     * let `acme/*: true` also trust `Acme/Evil` on private repos that don't
+     * normalize. Trust matching uses exact case to avoid that surprise.
+     */
+    private static function patternToRegex(string $pattern): string
+    {
+        return '{^' . str_replace('\\*', '.*', preg_quote($pattern, '{')) . '$}';
+    }
+
     private function configMapExists(): bool
     {
         $path = $this->rootDir . DIRECTORY_SEPARATOR . 'composer.json';
@@ -319,11 +346,25 @@ final class SkillTrustManager
 
     private function matchPattern(string $packageName): ?bool
     {
-        foreach ($this->loadConfigRules() as $pattern => $allow) {
+        $rules = $this->loadConfigRules();
+
+        // Two-pass: exact-string matches always win over glob patterns, even
+        // when the glob was added first. Otherwise a user who runs
+        //   composer skills:trust vendor/foo --deny
+        // after an earlier `vendor/*: true` glob would be silently overruled.
+        if (array_key_exists($packageName, $rules)) {
+            return $rules[$packageName];
+        }
+        foreach ($rules as $pattern => $allow) {
             if ($pattern === $packageName) {
-                return $allow;
+                continue; // already handled by the exact-match pass
             }
-            $regex = BasePackage::packageNameToRegexp($pattern);
+            // Skip non-glob patterns — they couldn't match anyway and skipping
+            // here lets us avoid an extra preg_match per non-glob rule.
+            if (!str_contains($pattern, '*')) {
+                continue;
+            }
+            $regex = self::patternToRegex($pattern);
             if (preg_match($regex, $packageName) === 1) {
                 return $allow;
             }

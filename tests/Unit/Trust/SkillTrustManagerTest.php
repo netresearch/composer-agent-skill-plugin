@@ -57,6 +57,53 @@ final class SkillTrustManagerTest extends TestCase
         self::assertFalse($mgr->isAllowed('vendor/foo'));
     }
 
+    public function testGlobMatchingIsCaseSensitive(): void
+    {
+        // Composer package names are normalized to lowercase. Allowing case-
+        // insensitive matching means `acme/*: true` would also trust `Acme/Evil`
+        // on private repos that don't normalize. Our matcher is case-sensitive.
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => ['acme/*' => true]]],
+        ]));
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+
+        self::assertTrue($mgr->isAllowed('acme/skill'));
+        self::assertFalse($mgr->hasDecision('Acme/Evil'));
+        self::assertFalse($mgr->hasDecision('ACME/EVIL'));
+    }
+
+    public function testExactMatchOverridesEarlierGlob(): void
+    {
+        // SECURITY: an explicit per-package decision must override a broader glob,
+        // even if the glob was added first.
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => [
+                'vendor/*' => true,
+                'vendor/foo' => false, // explicit deny added later
+            ]]],
+        ]));
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+
+        self::assertTrue($mgr->hasDecision('vendor/foo'));
+        self::assertFalse($mgr->isAllowed('vendor/foo'), 'Explicit deny must beat earlier glob allow');
+        // Other packages still match the glob
+        self::assertTrue($mgr->isAllowed('vendor/bar'));
+    }
+
+    public function testExactAllowOverridesEarlierGlobDeny(): void
+    {
+        file_put_contents($this->composerJsonPath, (string) json_encode([
+            'extra' => ['ai-agent-skill' => ['allow-skills' => [
+                'untrusted/*' => false,
+                'untrusted/specific-ok' => true,
+            ]]],
+        ]));
+        $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
+
+        self::assertTrue($mgr->isAllowed('untrusted/specific-ok'));
+        self::assertFalse($mgr->isAllowed('untrusted/other'));
+    }
+
     public function testGlobMatchAllowed(): void
     {
         file_put_contents($this->composerJsonPath, (string) json_encode([
@@ -124,7 +171,7 @@ final class SkillTrustManagerTest extends TestCase
         ]));
         $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
 
-        self::assertTrue($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
     }
 
     public function testDecideRespectsExistingDeny(): void
@@ -134,7 +181,27 @@ final class SkillTrustManagerTest extends TestCase
         ]));
         $mgr = new SkillTrustManager(new BufferIO(), $this->rootDir);
 
-        self::assertFalse($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Denied, $mgr->decide('vendor/foo'));
+    }
+
+    public function testDecideDiscardStaysPendingNotDenied(): void
+    {
+        // 'd' Discard should NOT persist any decision and should NOT register a
+        // session denial. Re-running decide() during the same session prompts again.
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $mgr = new SkillTrustManager($this->interactiveIo('d'), $this->rootDir);
+
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Pending, $mgr->decide('vendor/foo'));
+        // No persisted decision and no session entry — hasDecision is false.
+        self::assertFalse($mgr->hasDecision('vendor/foo'));
+    }
+
+    public function testDecideSessionAllowReturnsAllowed(): void
+    {
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        $mgr = new SkillTrustManager($this->interactiveIo('a'), $this->rootDir);
+
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
     }
 
     public function testDecideNonInteractiveSkipsAndWarns(): void
@@ -143,7 +210,7 @@ final class SkillTrustManagerTest extends TestCase
         $io = new BufferIO();
         $mgr = new SkillTrustManager($io, $this->rootDir);
 
-        self::assertFalse($mgr->decide('vendor/new'));
+        self::assertNotSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/new'));
 
         $output = $io->getOutput();
         self::assertStringContainsString('vendor/new', $output);
@@ -163,7 +230,7 @@ final class SkillTrustManagerTest extends TestCase
         file_put_contents($this->composerJsonPath, "{\n}\n");
         $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
 
-        self::assertTrue($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);
@@ -175,7 +242,7 @@ final class SkillTrustManagerTest extends TestCase
         file_put_contents($this->composerJsonPath, "{\n}\n");
         $mgr = new SkillTrustManager($this->interactiveIo('n'), $this->rootDir);
 
-        self::assertFalse($mgr->decide('vendor/bar'));
+        self::assertNotSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/bar'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);
@@ -188,7 +255,7 @@ final class SkillTrustManagerTest extends TestCase
         file_put_contents($this->composerJsonPath, $original);
         $mgr = new SkillTrustManager($this->interactiveIo('a'), $this->rootDir);
 
-        self::assertTrue($mgr->decide('vendor/baz'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/baz'));
         self::assertSame($original, file_get_contents($this->composerJsonPath));
         self::assertTrue($mgr->isAllowed('vendor/baz')); // session cache
     }
@@ -199,7 +266,7 @@ final class SkillTrustManagerTest extends TestCase
         file_put_contents($this->composerJsonPath, $original);
         $mgr = new SkillTrustManager($this->interactiveIo('d'), $this->rootDir);
 
-        self::assertFalse($mgr->decide('vendor/qux'));
+        self::assertNotSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/qux'));
         self::assertSame($original, file_get_contents($this->composerJsonPath));
         self::assertFalse($mgr->isAllowed('vendor/qux'));
     }
@@ -211,7 +278,7 @@ final class SkillTrustManagerTest extends TestCase
         ], JSON_PRETTY_PRINT));
         $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
 
-        self::assertTrue($mgr->decide('vendor/new'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/new'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);
@@ -319,7 +386,7 @@ final class SkillTrustManagerTest extends TestCase
         self::assertTrue($mgr->hasDecision('my-org/my-project'));
         self::assertTrue($mgr->isAllowed('my-org/my-project'));
         // decide() returns true without writing anything to composer.json (file is missing).
-        self::assertTrue($mgr->decide('my-org/my-project'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('my-org/my-project'));
         self::assertFileDoesNotExist($this->composerJsonPath);
     }
 
@@ -350,7 +417,7 @@ final class SkillTrustManagerTest extends TestCase
         ], JSON_PRETTY_PRINT));
 
         $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
-        self::assertTrue($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);
@@ -367,7 +434,7 @@ final class SkillTrustManagerTest extends TestCase
         ], JSON_PRETTY_PRINT));
 
         $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
-        self::assertTrue($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);
@@ -414,7 +481,7 @@ final class SkillTrustManagerTest extends TestCase
         ], JSON_PRETTY_PRINT));
 
         $mgr = new SkillTrustManager($this->interactiveIo('y'), $this->rootDir);
-        self::assertTrue($mgr->decide('vendor/foo'));
+        self::assertSame(\Netresearch\ComposerAgentSkillPlugin\Trust\TrustState::Allowed, $mgr->decide('vendor/foo'));
 
         $data = json_decode((string) file_get_contents($this->composerJsonPath), true);
         self::assertIsArray($data);

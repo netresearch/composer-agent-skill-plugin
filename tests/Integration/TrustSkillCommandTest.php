@@ -88,6 +88,49 @@ final class TrustSkillCommandTest extends TestCase
         self::assertStringContainsString('Revoked', $tester->getDisplay());
     }
 
+    public function testRejectsMalformedPackageName(): void
+    {
+        $command = new TrustSkillCommand();
+        $app = new Application();
+        $app->add($command);
+        $tester = new CommandTester($command);
+
+        $exit = $tester->execute(['package' => 'evil/*; rm -rf']);
+
+        self::assertNotSame(0, $exit);
+        self::assertStringContainsString('Invalid package name', $tester->getDisplay());
+        // Nothing persisted — composer.json stays untouched
+        $contents = (string) file_get_contents($this->rootDir . '/composer.json');
+        self::assertStringNotContainsString('rm -rf', $contents);
+    }
+
+    public function testRejectsUppercasePackageName(): void
+    {
+        $command = new TrustSkillCommand();
+        $app = new Application();
+        $app->add($command);
+        $tester = new CommandTester($command);
+
+        $exit = $tester->execute(['package' => 'Vendor/Foo']);
+
+        self::assertNotSame(0, $exit);
+        self::assertStringContainsString('Invalid package name', $tester->getDisplay());
+    }
+
+    public function testAcceptsValidGlob(): void
+    {
+        $command = new TrustSkillCommand();
+        $app = new Application();
+        $app->add($command);
+        $tester = new CommandTester($command);
+
+        $exit = $tester->execute(['package' => 'vendor/*']);
+
+        self::assertSame(0, $exit);
+        $data = json_decode((string) file_get_contents($this->rootDir . '/composer.json'), true);
+        self::assertSame(true, $data['extra']['ai-agent-skill']['allow-skills']['vendor/*']);
+    }
+
     public function testDenyAndRevokeAreMutuallyExclusive(): void
     {
         $command = new TrustSkillCommand();

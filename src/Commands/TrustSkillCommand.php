@@ -16,6 +16,16 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class TrustSkillCommand extends BaseCommand
 {
+    /**
+     * Composer package name with optional `*` glob in either segment.
+     *
+     * Mirrors Composer's package-name regex (lowercase only, slash-separated)
+     * but allows `*` so users can persist patterns like `vendor/*` or
+     * `vendor/skills-*`. We reject everything else so a malformed entry
+     * can't break the regex matcher on subsequent reads.
+     */
+    private const PACKAGE_PATTERN = '#^[a-z0-9*]([_.*-]?[a-z0-9*]+)*/[a-z0-9*]([_.*-]?[a-z0-9*]+)*$#';
+
     protected function configure(): void
     {
         $this
@@ -39,6 +49,14 @@ final class TrustSkillCommand extends BaseCommand
 
         if ($deny && $revoke) {
             $output->writeln('<error>--deny and --revoke are mutually exclusive.</error>');
+            return self::FAILURE;
+        }
+
+        if (preg_match(self::PACKAGE_PATTERN, $package) !== 1) {
+            $output->writeln(sprintf(
+                '<error>Invalid package name "%s". Expected lowercase vendor/name with optional `*` glob (e.g. vendor/foo, vendor/*, trusted-org/skills-*).</error>',
+                $package,
+            ));
             return self::FAILURE;
         }
 

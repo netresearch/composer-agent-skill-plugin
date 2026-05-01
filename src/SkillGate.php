@@ -34,25 +34,18 @@ final class SkillGate
         $pendingPackages = [];
 
         foreach ($allSkills as $skill) {
-            switch ($skill['trust_state']) {
-                case TrustState::Allowed:
-                    $allowed[] = $skill;
-                    break;
-                case TrustState::Denied:
-                    $deniedPackages[$skill['package']] = true;
-                    break;
-                case TrustState::Pending:
-                    // Only place that may prompt. After decide() we re-classify
-                    // so a freshly persisted 'n' (deny) lands in denied, not pending.
-                    if ($this->trust->decide($skill['package'])) {
-                        $allowed[] = $skill;
-                    } elseif ($this->trust->hasDecision($skill['package']) && !$this->trust->isAllowed($skill['package'])) {
-                        $deniedPackages[$skill['package']] = true;
-                    } else {
-                        $pendingPackages[$skill['package']] = true;
-                    }
-                    break;
+            $state = $skill['trust_state'];
+            if ($state === TrustState::Pending) {
+                // Only place that may prompt. decide() returns the resolved
+                // TrustState, so callers don't second-guess.
+                $state = $this->trust->decide($skill['package']);
             }
+
+            match ($state) {
+                TrustState::Allowed => $allowed[] = $skill,
+                TrustState::Denied  => $deniedPackages[$skill['package']] = true,
+                TrustState::Pending => $pendingPackages[$skill['package']] = true,
+            };
         }
 
         return new GateResult(
