@@ -149,7 +149,12 @@ final class SkillTrustManager
 
         $manipulator = new JsonManipulator($contents);
         $manipulator->addSubNode('extra', self::EXTRA_KEY, $merged);
-        file_put_contents($path, $manipulator->getContents());
+        if (@file_put_contents($path, $manipulator->getContents()) === false) {
+            $this->io->writeError(sprintf(
+                '<error>Failed to write trust decisions to %s. Check file permissions.</error>',
+                $path,
+            ));
+        }
     }
 
     /**

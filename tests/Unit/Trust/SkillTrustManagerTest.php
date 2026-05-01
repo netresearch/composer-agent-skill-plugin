@@ -293,6 +293,31 @@ final class SkillTrustManagerTest extends TestCase
         self::assertSame(['vendor/foo' => true], $data['extra']['ai-agent-skill']['allow-skills']);
     }
 
+    public function testWriteFailureEmitsWarning(): void
+    {
+        // Make composer.json read-only so file_put_contents fails.
+        file_put_contents($this->composerJsonPath, "{\n}\n");
+        chmod($this->composerJsonPath, 0o444);
+
+        $io = $this->createStub(IOInterface::class);
+        $io->method('isInteractive')->willReturn(true);
+        $io->method('ask')->willReturn('y');
+        $messages = [];
+        $io->method('writeError')->willReturnCallback(function (string|array $msg) use (&$messages): void {
+            $messages[] = is_array($msg) ? implode("\n", $msg) : $msg;
+        });
+
+        $mgr = new SkillTrustManager($io, $this->rootDir);
+        $mgr->decide('vendor/foo');
+
+        // Restore writability before tearDown unlinks.
+        chmod($this->composerJsonPath, 0o644);
+
+        $combined = implode("\n", $messages);
+        self::assertStringContainsString('Failed to write', $combined);
+        self::assertStringContainsString('composer.json', $combined);
+    }
+
     public function testPersistPreservesExistingObjectFormSkills(): void
     {
         file_put_contents($this->composerJsonPath, (string) json_encode([
