@@ -8,6 +8,7 @@ use Composer\Plugin\Capability\CommandProvider;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ListSkillsCommand;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ListTrustCommand;
 use Netresearch\ComposerAgentSkillPlugin\Commands\ReadSkillCommand;
+use Netresearch\ComposerAgentSkillPlugin\Commands\SkillsCommand;
 use Netresearch\ComposerAgentSkillPlugin\Commands\TrustSkillCommand;
 
 final class CommandCapability implements CommandProvider
@@ -24,6 +25,12 @@ final class CommandCapability implements CommandProvider
             new ReadSkillCommand(),
             new TrustSkillCommand(),
             new ListTrustCommand(),
+            new SkillsCommand(),
+            new SkillsCommand('add'),
+            new SkillsCommand('install'),
+            new SkillsCommand('update'),
+            new SkillsCommand('remove'),
+            new SkillsCommand('list'),
         ];
     }
 }

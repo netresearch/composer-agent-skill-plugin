@@ -12,6 +12,11 @@ use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsCoordinator;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\DirectSkillsException;
+use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
+use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
+use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 
 /**
  * Main plugin class for AI Agent Skill management.
@@ -23,39 +28,20 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
 {
     private IOInterface $io;
 
-    /**
-     * Activate the plugin.
-     *
-     * Called when the plugin is activated by Composer.
-     */
     public function activate(Composer $composer, IOInterface $io): void
     {
         $this->io = $io;
     }
 
-    /**
-     * Deactivate the plugin.
-     *
-     * Called when the plugin is deactivated.
-     */
     public function deactivate(Composer $composer, IOInterface $io): void
     {
-        // No cleanup needed on deactivation
     }
 
-    /**
-     * Uninstall the plugin.
-     *
-     * Called when the plugin is uninstalled.
-     */
     public function uninstall(Composer $composer, IOInterface $io): void
     {
-        // No cleanup needed on uninstall
     }
 
     /**
-     * Get plugin capabilities.
-     *
      * @return array<string, class-string>
      */
     public function getCapabilities(): array
@@ -66,57 +52,62 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
     }
 
     /**
-     * Get subscribed events.
-     *
-     * Hooks into install and update; both fire `composer require` indirectly
-     * (it runs an update internally). `composer create-project` covers itself
-     * because it dispatches POST_INSTALL_CMD before its own POST_CREATE_PROJECT_CMD.
-     *
-     * Deliberately NOT subscribing to POST_AUTOLOAD_DUMP — `composer dump-autoload`
-     * is invoked when developers regenerate autoload files, but vendored skills
-     * are not normally edited in place. Subscribing would re-scan the package
-     * tree on every dump for no behavioral gain.
-     *
      * @return array<string, string|array<int, string|int>>
      */
     public static function getSubscribedEvents(): array
     {
         return [
-            ScriptEvents::POST_INSTALL_CMD => 'updateAgentsMd',
-            ScriptEvents::POST_UPDATE_CMD => 'updateAgentsMd',
+            ScriptEvents::POST_INSTALL_CMD => 'onPostInstall',
+            ScriptEvents::POST_UPDATE_CMD => 'onPostUpdate',
         ];
     }
 
+    public function onPostInstall(Event $event): void
+    {
+        try {
+            $composerJsonPath = $event->getComposer()->getConfig()->getConfigSource()->getName();
+            $projectRoot = dirname($composerJsonPath);
+            (new DirectSkillsCoordinator())->installPinned($this->io, $projectRoot);
+        } catch (DirectSkillsException $e) {
+            $this->io->writeError(sprintf('<error>%s</error>', $e->getMessage()));
+            throw $e;
+        }
+        $this->regenerateAgentsMdSafe($event);
+    }
+
+    public function onPostUpdate(Event $event): void
+    {
+        try {
+            $composerJsonPath = $event->getComposer()->getConfig()->getConfigSource()->getName();
+            $projectRoot = dirname($composerJsonPath);
+            (new DirectSkillsCoordinator())->updateFloating($this->io, $projectRoot);
+        } catch (DirectSkillsException $e) {
+            $this->io->writeError(sprintf('<error>%s</error>', $e->getMessage()));
+            throw $e;
+        }
+        $this->regenerateAgentsMdSafe($event);
+    }
+
     /**
-     * Update AGENTS.md with discovered (and trusted) skills.
+     * Update AGENTS.md with discovered (and trusted) skills from Composer packages and direct installs.
      *
-     * Called automatically after composer install/update. This is the only
-     * place where SkillTrustManager::decide() may prompt the user — pure
-     * discovery (used by `composer list-skills`) never triggers prompts.
+     * Wrapped in try/catch so incidental failures never block Composer — unlike direct-skills lock sync.
      */
-    public function updateAgentsMd(Event $event): void
+    private function regenerateAgentsMdSafe(Event $event): void
     {
         try {
             $composer = $event->getComposer();
-            // Composer's ConfigSource::getName() returns the absolute composer.json
-            // path. This is the right source — getcwd() breaks under
-            // `composer --working-dir=…`, daemon contexts, and in tests where
-            // the working directory drifts.
             $composerJsonPath = $composer->getConfig()->getConfigSource()->getName();
             $projectRoot = dirname($composerJsonPath);
 
-            $provider = new \Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider();
+            $provider = new InstalledVersionsProvider();
             $rootPackageName = $composer->getPackage()->getName();
-            $trust = \Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager::forComposerJson(
+            $trust = SkillTrustManager::forComposerJson(
                 $this->io,
                 $composerJsonPath,
                 $rootPackageName,
             );
 
-            // First-run policy: when the trust map is missing AND there are legacy
-            // type:ai-agent-skill packages, ask the user once how to seed
-            // (none/direct/all). Defaults to 'none' (strict) — including in
-            // non-interactive mode, which also emits a recovery hint per package.
             $rootRequires = $composer->getPackage()->getRequires();
             $rootDevRequires = $composer->getPackage()->getDevRequires();
             $directNames = array_merge(array_keys($rootRequires), array_keys($rootDevRequires));
@@ -127,7 +118,28 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
             $trust->applyFirstRunPolicy($firstRunInput);
 
             $discovery = new SkillDiscovery($this->io, $provider, $trust);
-            $allSkills = $discovery->discoverAllSkills();
+            $packageSkills = $discovery->discoverAllSkills();
+
+            $directDiscover = new DirectInstalledSkillDiscovery();
+            $directSkills = $directDiscover->discoverInstalled($this->io, $trust, $projectRoot);
+
+            $byName = [];
+            foreach ($packageSkills as $skill) {
+                $byName[$skill['name']] = 'composer package';
+            }
+            foreach ($directSkills as $skill) {
+                if (isset($byName[$skill['name']])) {
+                    $this->io->writeError(sprintf(
+                        '<error>Duplicate skill name "%s" from %s and direct install. Fix composer.json / sources.</error>',
+                        $skill['name'],
+                        $byName[$skill['name']],
+                    ));
+                    throw new \RuntimeException(sprintf('Duplicate skill name: %s', $skill['name']));
+                }
+                $byName[$skill['name']] = 'direct skills';
+            }
+
+            $allSkills = array_merge($packageSkills, $directSkills);
 
             $gate = new SkillGate($trust);
             $result = $gate->gate($allSkills);
@@ -159,16 +171,10 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
                 ));
             }
         } catch (\Throwable $e) {
-            // Catch \Throwable (not \Exception) so PHP 8 \Error subclasses
-            // like \ValueError (e.g. NUL byte in a path arg) don't bubble out
-            // and abort the entire composer install. The plugin's failure
-            // should never block dependency installation.
             $this->io->writeError(sprintf(
                 '<error>AI Agent Skill Plugin error: %s</error>',
                 $e->getMessage()
             ));
-            // Full stack trace under -v / -vv / -vvv so debugging doesn't
-            // require rebuilding the failure scenario.
             if ($this->io->isVerbose()) {
                 $this->io->writeError((string) $e);
             }

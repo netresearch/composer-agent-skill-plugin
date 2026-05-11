@@ -6,6 +6,7 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
+use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
@@ -37,20 +38,22 @@ final class ListSkillsCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        $discovery = $this->discovery;
-        if ($discovery === null) {
-            [$composerJsonPath, $rootName] = $this->resolveContext();
-            $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
-            $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
-        }
+        [$composerJsonPath, $rootName] = $this->resolveContext();
+        $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
+        $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
 
         $skills = $discovery->discoverAllSkills();
+        $skills = array_merge(
+            $skills,
+            (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath)),
+        );
+        $skills = $this->dedupeSkillsByName($skills);
 
         if ($skills === []) {
             $output->writeln('');
-            $output->writeln(' <fg=yellow>[WARNING]</> No AI agent skills found in installed packages.');
+            $output->writeln(' <fg=yellow>[WARNING]</> No AI agent skills found (Composer packages or direct installs).');
             $output->writeln('');
-            $output->writeln(' <fg=cyan>!</> <fg=cyan>[NOTE]</> Install packages declaring extra.ai-agent-skill to register skills.');
+            $output->writeln(' <fg=cyan>!</> <fg=cyan>[NOTE]</> Use extra.ai-agent-skill packages or `composer skills add` for direct sources.');
             $output->writeln('');
             return self::SUCCESS;
         }
@@ -94,5 +97,21 @@ final class ListSkillsCommand extends BaseCommand
         $output->writeln('');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}> $skills
+     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
+     */
+    private function dedupeSkillsByName(array $skills): array
+    {
+        $byName = [];
+        foreach ($skills as $s) {
+            if (!isset($byName[$s['name']])) {
+                $byName[$s['name']] = $s;
+            }
+        }
+
+        return array_values($byName);
     }
 }

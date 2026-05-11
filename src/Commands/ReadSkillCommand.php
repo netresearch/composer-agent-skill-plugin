@@ -6,6 +6,7 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
+use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
@@ -47,13 +48,15 @@ final class ReadSkillCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        $discovery = $this->discovery;
-        if ($discovery === null) {
-            [$composerJsonPath, $rootName] = $this->resolveContext();
-            $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
-            $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
-        }
+        [$composerJsonPath, $rootName] = $this->resolveContext();
+        $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
+        $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
         $skills = $discovery->discoverAllSkills();
+        $skills = array_merge(
+            $skills,
+            (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath)),
+        );
+        $skills = $this->dedupeSkillsByName($skills);
 
         // Find the requested skill
         $foundSkill = null;
@@ -114,7 +117,7 @@ final class ReadSkillCommand extends BaseCommand
             $output->writeln('');
         }
 
-        // Display working directory reminder (helps AI agents use correct path for scripts)
+        // Display working directory reminder (correct cwd for bundled scripts)
         $output->writeln('');
         $output->writeln('---');
         $output->writeln(sprintf('<info>ℹ️  Working Directory: %s</info>', $foundSkill['location']));
@@ -127,5 +130,21 @@ final class ReadSkillCommand extends BaseCommand
         $output->writeln('');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}> $skills
+     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
+     */
+    private function dedupeSkillsByName(array $skills): array
+    {
+        $byName = [];
+        foreach ($skills as $s) {
+            if (!isset($byName[$s['name']])) {
+                $byName[$s['name']] = $s;
+            }
+        }
+
+        return array_values($byName);
     }
 }

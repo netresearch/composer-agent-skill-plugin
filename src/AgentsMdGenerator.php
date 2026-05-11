@@ -17,14 +17,24 @@ final class AgentsMdGenerator
     /**
      * Generate skills XML content.
      *
-     * @param array<int, array{name: string, description: string, location: string}> $skills
+     * @param array<int, array{name: string, description: string, location: string, direct_source?: string, direct_pin?: string}> $skills
      */
     public function generateSkillsXml(array $skills): string
     {
         // Sort skills alphabetically by name
         usort($skills, fn ($a, $b) => strcmp($a['name'], $b['name']));
 
-        $xml = '<skills_system priority="1">' . "\n\n";
+        $hasDirectMeta = false;
+        foreach ($skills as $sk) {
+            if (!empty($sk['direct_source'])) {
+                $hasDirectMeta = true;
+                break;
+            }
+        }
+        $rootTag = $hasDirectMeta
+            ? '<skills_system priority="1" schema-version="2">'
+            : '<skills_system priority="1">';
+        $xml = $rootTag . "\n\n";
         $xml .= '## Available Skills' . "\n\n";
         $xml .= self::SKILLS_START_MARKER . "\n";
         $xml .= '<usage>' . "\n";
@@ -48,6 +58,13 @@ final class AgentsMdGenerator
                 $xml .= '<name>' . htmlspecialchars($skill['name'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</name>' . "\n";
                 $xml .= '<description>' . htmlspecialchars($skill['description'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</description>' . "\n";
                 $xml .= '<location>' . htmlspecialchars($skill['location'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</location>' . "\n";
+                if (!empty($skill['direct_source'])) {
+                    $src = 'direct:' . htmlspecialchars((string) $skill['direct_source'], ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                    $xml .= '<source>' . $src . '</source>' . "\n";
+                }
+                if (!empty($skill['direct_pin'])) {
+                    $xml .= '<pin>' . htmlspecialchars((string) $skill['direct_pin'], ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</pin>' . "\n";
+                }
                 $xml .= '</skill>' . "\n";
 
                 // Add double newline between skills (but not after last one)
@@ -67,7 +84,7 @@ final class AgentsMdGenerator
     /**
      * Update AGENTS.md file with generated skills content.
      *
-     * @param array<int, array{name: string, description: string, location: string}> $skills
+     * @param array<int, array{name: string, description: string, location: string, direct_source?: string, direct_pin?: string}> $skills
      * @throws \RuntimeException If file operations fail
      */
     public function updateAgentsMd(string $agentsMdPath, array $skills): void

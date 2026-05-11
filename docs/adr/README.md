@@ -14,6 +14,10 @@ Format follows [MADR](https://adr.github.io/madr/) loosely — each ADR has *Con
 | [006](006-first-run-policy-deny-default.md) | Accepted | First-run policy `[n/d/a]` with deny-by-default                               |
 | [007](007-auto-trust-root-package.md) | Accepted | Auto-trust the root package                                                   |
 | [008](008-description-sanitization.md) | Accepted | Reject control chars and bidi overrides in skill descriptions                 |
+| [009](009-direct-skills-lifecycle-blocking-policy.md) | Accepted | Direct skills sync fails Composer on lock mismatch; AGENTS path stays non-blocking |
+| [010](010-cli-skills-command-shape.md) | Accepted | `skills` dispatcher + colon aliases; trust stays `skills:trust`               |
+| [011](011-agents-md-direct-skill-metadata.md) | Accepted | AGENTS.md extended tags additive after `<location>`; optional schema-version   |
+| [012](012-skills-content-hash-and-trust.md) | Accepted | content-hash excludes `trust`; normalize sources only                           |
 
 ## When to write a new ADR
 
