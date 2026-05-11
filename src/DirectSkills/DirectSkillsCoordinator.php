@@ -17,6 +17,7 @@ use Netresearch\ComposerAgentSkillPlugin\Lock\SkillLockIo;
 use Netresearch\ComposerAgentSkillPlugin\Source\ResolvedSource;
 use Netresearch\ComposerAgentSkillPlugin\Source\SourceResolver;
 use Netresearch\ComposerAgentSkillPlugin\Util\ComposerJsonReader;
+use Netresearch\ComposerAgentSkillPlugin\Util\FilesystemUtil;
 use Netresearch\ComposerAgentSkillPlugin\Util\GitCli;
 use Netresearch\ComposerAgentSkillPlugin\Util\SkillMarkdownParser;
 
@@ -149,7 +150,7 @@ final class DirectSkillsCoordinator
             if (!is_dir($skillDir)) {
                 throw new DirectSkillsException(sprintf('Path skill source missing: %s', $skillDir));
             }
-            $this->copier->copyInto($skillDir, $installAbs);
+            $this->copier->copyInto($skillDir, $installAbs, $io);
             $sum = $this->skillHasher->hashSkillDirectory($installAbs);
             if ($sum !== $pkg->checksum) {
                 throw new DirectSkillsException(sprintf('Checksum mismatch for skill %s after install.', $pkg->name));
@@ -172,7 +173,7 @@ final class DirectSkillsCoordinator
         if (!is_dir($inside)) {
             throw new DirectSkillsException(sprintf('Skill path not found in clone: %s', $pkg->pathInSource));
         }
-        $this->copier->copyInto($inside, $installAbs);
+        $this->copier->copyInto($inside, $installAbs, $io);
         $sum = $this->skillHasher->hashSkillDirectory($installAbs);
         if ($sum !== $pkg->checksum) {
             throw new DirectSkillsException(sprintf('Checksum mismatch for skill %s.', $pkg->name));
@@ -193,14 +194,14 @@ final class DirectSkillsCoordinator
                 return;
             } catch (\RuntimeException $e) {
                 $io->writeError(sprintf('<comment>Refreshing git cache %s: %s</comment>', $repoDir, $e->getMessage()));
-                $this->rmTree($repoDir);
+                FilesystemUtil::removeDirectoryTree($repoDir, $io);
             }
         }
         if (!is_dir(dirname($repoDir))) {
-            mkdir(dirname($repoDir), 0777, true);
+            mkdir(dirname($repoDir), FilesystemUtil::DIRECTORY_MODE, true);
         }
         if (is_dir($repoDir)) {
-            $this->rmTree($repoDir);
+            FilesystemUtil::removeDirectoryTree($repoDir, $io);
         }
         $this->gitMustRun(['clone', '--quiet', $url, $repoDir]);
         $this->gitMustRun(['checkout', '--quiet', $commit], $repoDir);
@@ -221,25 +222,6 @@ final class DirectSkillsCoordinator
     private function gitRevParseHead(string $repoDir): string
     {
         return $this->gitMustRun(['rev-parse', 'HEAD'], $repoDir);
-    }
-
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $it = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-        foreach ($it as $fileInfo) {
-            if (!$fileInfo instanceof \SplFileInfo) {
-                continue;
-            }
-            $p = $fileInfo->getPathname();
-            $fileInfo->isDir() ? @rmdir($p) : @unlink($p);
-        }
-        @rmdir($dir);
     }
 
     private function resolveSourceEntry(SourceEntry $entry): ResolvedSource
@@ -283,16 +265,16 @@ final class DirectSkillsCoordinator
         $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->sourcesDir);
         $slug = substr(hash('sha256', $url), 0, 16);
         $workDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . 'work';
-        $this->rmTree($workDir);
+        FilesystemUtil::removeDirectoryTree($workDir, $io);
         if (!is_dir(dirname($workDir))) {
-            mkdir(dirname($workDir), 0777, true);
+            mkdir(dirname($workDir), FilesystemUtil::DIRECTORY_MODE, true);
         }
         try {
             GitCli::mustRun(['clone', '--quiet', '--depth', '1', '--branch', $ref, $url, $workDir]);
         } catch (\RuntimeException) {
-            $this->rmTree($workDir);
+            FilesystemUtil::removeDirectoryTree($workDir, $io);
             if (!is_dir(dirname($workDir))) {
-                mkdir(dirname($workDir), 0777, true);
+                mkdir(dirname($workDir), FilesystemUtil::DIRECTORY_MODE, true);
             }
             $this->gitMustRun(['clone', '--quiet', $url, $workDir]);
             $this->gitMustRun(['checkout', '--quiet', $ref], $workDir);
@@ -339,7 +321,7 @@ final class DirectSkillsCoordinator
                 $meta !== [] ? $meta : null,
             );
         }
-        $this->rmTree($workDir);
+        FilesystemUtil::removeDirectoryTree($workDir, $io);
 
         return $out;
     }

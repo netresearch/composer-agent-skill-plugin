@@ -11,6 +11,7 @@ use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
+use Netresearch\ComposerAgentSkillPlugin\Util\DiscoveredSkills;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
@@ -42,12 +43,9 @@ final class ListSkillsCommand extends BaseCommand
         $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
         $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
 
-        $skills = $discovery->discoverAllSkills();
-        $skills = array_merge(
-            $skills,
-            (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath)),
-        );
-        $skills = $this->dedupeSkillsByName($skills);
+        $packageSkills = $discovery->discoverAllSkills();
+        $directSkills = (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath));
+        $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
 
         if ($skills === []) {
             $output->writeln('');
@@ -97,21 +95,5 @@ final class ListSkillsCommand extends BaseCommand
         $output->writeln('');
 
         return self::SUCCESS;
-    }
-
-    /**
-     * @param list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}> $skills
-     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
-     */
-    private function dedupeSkillsByName(array $skills): array
-    {
-        $byName = [];
-        foreach ($skills as $s) {
-            if (!isset($byName[$s['name']])) {
-                $byName[$s['name']] = $s;
-            }
-        }
-
-        return array_values($byName);
     }
 }
