@@ -1,6 +1,6 @@
 # Composer AI Agent Skill Plugin
 
-A Composer plugin that enables universal AI agent skill distribution and management for PHP projects. Automatically discovers, registers, and manages AI agent skills from Composer packages, providing a standardized way for the PHP ecosystem to share agent capabilities.
+A Composer plugin for **AI agent skills** in PHP projects: it discovers skills shipped in **Composer packages** (`extra.ai-agent-skill` / legacy `type: ai-agent-skill`), and optionally installs skills **directly from GitHub or project paths** via `extra.ai-agent-skills`, a pinned **`composer.skills.lock`**, and **`composer skills …`** commands. It generates and maintains **`AGENTS.md`** so agents get a consistent, openskills-style skill index—whether skills come from packages or direct sources.
 
 [![CI](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-154%20passing-success)](tests/)
