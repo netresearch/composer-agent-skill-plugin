@@ -27,6 +27,25 @@ final class DirectSkillsPathGuard
     }
 
     /**
+     * Git materialization uses the lock commit as a single cache path segment; reject traversal or odd values.
+     *
+     * @return string Normalized 40-char lowercase SHA for directory names.
+     *
+     * @throws DirectSkillsException
+     */
+    public static function assertLockGitCommitSha(string $commit): string
+    {
+        $c = strtolower(trim($commit));
+        if (!preg_match('/^[0-9a-f]{40}$/', $c)) {
+            throw new DirectSkillsException(
+                'composer.skills.lock git commit must be a 40-character hexadecimal SHA (possible lock tampering).',
+            );
+        }
+
+        return $c;
+    }
+
+    /**
      * Lockfile path fields (install-path, path, url for path-type packages).
      *
      * @throws DirectSkillsException

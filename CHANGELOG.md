@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Direct skills security hardening** — reject **symlinks** when copying and hashing skill trees; validate **`composer.skills.lock`** git commits as **40-char hex** before using them as cache path segments; allow path-source **`url: "."`** in the lock; validate clone/tag refs so they cannot start with `-` (git CLI ambiguity). Note: `git checkout -- <rev>` is not used because Git treats a lone argument after `--` as a **pathspec**, not a revision.
+
 ## [2.0.0] - 2026-05-01
 
 ### Breaking changes

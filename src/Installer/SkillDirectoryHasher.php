@@ -47,6 +47,12 @@ final class SkillDirectoryHasher
             if (!$fileInfo instanceof \SplFileInfo || !$fileInfo->isFile()) {
                 continue;
             }
+            if ($fileInfo->isLink()) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Symlinks are not allowed in skill directories (reject before hash): %s',
+                    $fileInfo->getPathname(),
+                ));
+            }
             $full = $fileInfo->getPathname();
             $rel = substr($full, strlen($root) + 1);
             $out[] = str_replace(DIRECTORY_SEPARATOR, '/', $rel);

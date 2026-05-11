@@ -151,7 +151,7 @@ final class DirectSkillsCoordinator
 
         if ($pkg->type === 'path') {
             $urlRel = (string) $pkg->url;
-            DirectSkillsPathGuard::assertLockRelativePosix('url', $urlRel, false);
+            DirectSkillsPathGuard::assertLockRelativePosix('url', $urlRel, true);
             $basePath = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $urlRel);
             $skillDir = $basePath . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $pkg->pathInSource);
             $skillDir = realpath($skillDir) ?: $skillDir;
@@ -172,9 +172,10 @@ final class DirectSkillsCoordinator
         if ($url === null || $url === '') {
             throw new DirectSkillsException(sprintf('Locked package %s has no clone URL.', $pkg->name));
         }
+        $commitSeg = DirectSkillsPathGuard::assertLockGitCommitSha($pkg->commit);
         $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->cacheDir);
         $slug = substr(hash('sha256', $url), 0, 16);
-        $repoDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . $pkg->commit;
+        $repoDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . $commitSeg;
         $this->ensureGitCheckout($io, $url, $pkg->commit, $repoDir);
 
         $inside = $repoDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $pkg->pathInSource);
@@ -190,12 +191,27 @@ final class DirectSkillsCoordinator
         }
     }
 
+    /**
+     * Reject refs that could be parsed as git options. We intentionally do not use
+     * {@code git checkout -- <rev>} because a lone token after {@code --} is treated as a pathspec, not a revision.
+     */
+    private function assertGitRevNotCliFlag(string $label, string $ref): void
+    {
+        $r = trim($ref);
+        if ($r === '' || str_starts_with($r, '-')) {
+            throw new DirectSkillsException(sprintf(
+                'Invalid %s: must not be empty or start with "-" (ambiguous git CLI option).',
+                $label,
+            ));
+        }
+    }
+
     private function ensureGitCheckout(IOInterface $io, string $url, string $commit, string $repoDir): void
     {
         if (is_dir($repoDir . DIRECTORY_SEPARATOR . '.git')) {
             try {
                 $head = GitCli::revParse($repoDir);
-                if ($head === $commit) {
+                if (strtolower($head) === strtolower($commit)) {
                     return;
                 }
                 GitCli::mustRun(['fetch', '--quiet', 'origin'], $repoDir);
@@ -273,6 +289,7 @@ final class DirectSkillsCoordinator
         }
         $storedRef = $resolved->ref ?? 'main';
         $cloneRef = GitSemverResolver::resolveToGitRef($url, $storedRef);
+        $this->assertGitRevNotCliFlag('clone ref', $cloneRef);
         $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->cacheDir);
         $slug = substr(hash('sha256', $url), 0, 16);
         $workDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . 'work';

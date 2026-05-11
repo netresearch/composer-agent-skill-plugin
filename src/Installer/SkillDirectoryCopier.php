@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Installer;
 
 use Composer\IO\IOInterface;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\DirectSkillsException;
 use Netresearch\ComposerAgentSkillPlugin\Util\FilesystemUtil;
 
 /**
- * Recursive copy of a skill directory (files only; follows symlinks as files — copy content).
+ * Recursive copy of a skill directory (regular files and directories only; symlinks are rejected).
  */
 final class SkillDirectoryCopier
 {
@@ -36,6 +37,12 @@ final class SkillDirectoryCopier
         foreach ($iterator as $fileInfo) {
             if (!$fileInfo instanceof \SplFileInfo) {
                 continue;
+            }
+            if ($fileInfo->isLink()) {
+                throw new DirectSkillsException(sprintf(
+                    'Symlinks are not allowed in skill sources (reject before copy): %s',
+                    $fileInfo->getPathname(),
+                ));
             }
             $sub = substr($fileInfo->getPathname(), strlen($sourceDir) + 1);
             $dest = $targetRoot . DIRECTORY_SEPARATOR . $sub;
