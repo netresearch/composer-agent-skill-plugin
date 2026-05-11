@@ -45,7 +45,15 @@ final class ListSkillsCommand extends BaseCommand
 
         $packageSkills = $discovery->discoverAllSkills();
         $directSkills = (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath));
-        $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        try {
+            $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        } catch (\RuntimeException $e) {
+            $output->writeln('');
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
+            $output->writeln('');
+
+            return self::FAILURE;
+        }
 
         if ($skills === []) {
             $output->writeln('');

@@ -14,6 +14,36 @@ final class FilesystemUtil
     public const DIRECTORY_MODE = 0755;
 
     /**
+     * Express $absoluteOrRelative as a POSIX path relative to $projectRoot when it resolves under
+     * that root; otherwise returns a slash-normalized copy of the input path string.
+     *
+     * Uses a strict directory-prefix check so siblings like "/proj-other" are not treated as
+     * under "/proj".
+     */
+    public static function relativePosixFromProjectRoot(string $projectRoot, string $absoluteOrRelative): string
+    {
+        $root = realpath($projectRoot);
+        if ($root === false) {
+            return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
+        }
+        $path = realpath($absoluteOrRelative);
+        if ($path === false) {
+            return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
+        }
+        if ($path === $root) {
+            return '.';
+        }
+        $prefix = $root . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($path, $prefix)) {
+            return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
+        }
+        $rel = substr($path, strlen($prefix));
+        $rel = str_replace(DIRECTORY_SEPARATOR, '/', $rel);
+
+        return './' . $rel;
+    }
+
+    /**
      * Remove a directory tree best-effort. Per-path failures are reported when $io is verbose.
      */
     public static function removeDirectoryTree(string $dir, ?IOInterface $io = null): void

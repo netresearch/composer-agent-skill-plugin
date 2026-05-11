@@ -13,6 +13,7 @@ use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\MissingSkillsLoc
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\StaleSkillsLockException;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\SourceEntry;
 use Netresearch\ComposerAgentSkillPlugin\Util\ComposerJsonDirectSkillsWriter;
+use Netresearch\ComposerAgentSkillPlugin\Util\FilesystemUtil;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputArgument;
@@ -184,7 +185,7 @@ final class SkillsCommand extends BaseCommand
 
         $pathStored = $resolved->path;
         if ($resolved->type === 'path' && $pathStored !== null && $pathStored !== '') {
-            $pathStored = $this->relativePathFromProjectRoot($projectRoot, $pathStored);
+            $pathStored = FilesystemUtil::relativePosixFromProjectRoot($projectRoot, $pathStored);
         }
 
         $type = $resolved->type === 'path' ? 'path' : 'github';
@@ -348,25 +349,5 @@ final class SkillsCommand extends BaseCommand
         }
 
         return 0;
-    }
-
-    private function relativePathFromProjectRoot(string $projectRoot, string $absoluteOrRelative): string
-    {
-        $root = realpath($projectRoot);
-        if ($root === false) {
-            return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
-        }
-        $path = realpath($absoluteOrRelative);
-        if ($path === false) {
-            return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
-        }
-        if (str_starts_with($path, $root)) {
-            $rel = substr($path, strlen($root));
-            $rel = ltrim(str_replace(DIRECTORY_SEPARATOR, '/', $rel), '/');
-
-            return $rel === '' ? '.' : './' . $rel;
-        }
-
-        return str_replace(DIRECTORY_SEPARATOR, '/', $absoluteOrRelative);
     }
 }

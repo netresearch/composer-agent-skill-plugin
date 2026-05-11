@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Netresearch\ComposerAgentSkillPlugin\Tests\Unit;
 
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsOutdatedChecker;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\DirectSkillsException;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\GitRemoteHeadLookup;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\PluginVersion;
 use Netresearch\ComposerAgentSkillPlugin\Installer\SkillDirectoryHasher;
@@ -88,6 +89,34 @@ final class DirectSkillsOutdatedCheckerTest extends TestCase
             };
             $checker = new DirectSkillsOutdatedChecker($stub);
             self::assertSame([], $checker->collectOutdated($root, null));
+        } finally {
+            $this->rmTree($root);
+        }
+    }
+
+    public function testPathSkillRejectsTamperedLockUrlWithTraversal(): void
+    {
+        $root = sys_get_temp_dir() . '/skill-outdated-badlock-' . bin2hex(random_bytes(5));
+        mkdir($root, 0777, true);
+        try {
+            $this->writeComposerPathSource($root, './skills/mine');
+            $pkg = new LockedSkillPackage(
+                'mine',
+                'local/x',
+                'path',
+                '../escape',
+                null,
+                'local',
+                '.',
+                'sha256:deadbeef',
+                'vendor/agent-skills/installed/mine',
+                null,
+            );
+            (new SkillLockIo($root))->write(new SkillLockFile(1, PluginVersion::detect(), 'x', '2026-01-01T00:00:00+00:00', [$pkg]));
+
+            $this->expectException(DirectSkillsException::class);
+            $this->expectExceptionMessage('url');
+            (new DirectSkillsOutdatedChecker())->collectOutdated($root, null);
         } finally {
             $this->rmTree($root);
         }

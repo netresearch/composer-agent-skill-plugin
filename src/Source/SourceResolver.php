@@ -44,8 +44,8 @@ final class SourceResolver
             return new ResolvedSource($name, 'github', $url, $refCli ?? $ref, $sub);
         }
 
-        // HTTPS github repo
-        if (preg_match('#^https?://github\.com/([^/]+)/([^/.]+)(\.git)?$#', $input, $m)) {
+        // HTTPS github repo (repo segment may contain dots, e.g. my.skill; optional .git suffix)
+        if (preg_match('~^https?://github\.com/([^/]+)/([^/?#]+?)(?:\.git)?/?$~', $input, $m)) {
             $owner = $m[1];
             $repo = $m[2];
             $url = sprintf('https://github.com/%s/%s.git', $owner, $repo);

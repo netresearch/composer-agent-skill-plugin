@@ -115,6 +115,10 @@ final class DirectSkillsOutdatedChecker
         if ($rel === '') {
             return null;
         }
+        DirectSkillsPathGuard::assertLockRelativePosix('url', $rel, true);
+        DirectSkillsPathGuard::assertLockRelativePosix('path', $pkg->pathInSource, true);
+        DirectSkillsPathGuard::assertLockRelativePosix('install-path', $pkg->installPath, false);
+
         $baseRel = str_replace('/', DIRECTORY_SEPARATOR, ltrim(str_replace('\\', '/', $rel), './'));
         $base = $projectRoot . DIRECTORY_SEPARATOR . $baseRel;
         $base = realpath($base);

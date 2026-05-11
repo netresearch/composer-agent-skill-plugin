@@ -25,6 +25,20 @@ final class SourceResolverTest extends TestCase
         self::assertNull($r->path);
     }
 
+    public function testGithubHttpsUrlAllowsDotsInRepositoryName(): void
+    {
+        $r = $this->resolver->resolve('https://github.com/octocat/hello.world');
+        self::assertSame('octocat/hello.world', $r->name);
+        self::assertSame('https://github.com/octocat/hello.world.git', $r->url);
+    }
+
+    public function testGithubHttpsUrlAllowsDotsAndOptionalGitSuffix(): void
+    {
+        $r = $this->resolver->resolve('https://github.com/octocat/hello.world.git');
+        self::assertSame('octocat/hello.world', $r->name);
+        self::assertSame('https://github.com/octocat/hello.world.git', $r->url);
+    }
+
     public function testGithubShorthandStripsTrailingGitSuffix(): void
     {
         $r = $this->resolver->resolve('octocat/Hello-World.git');

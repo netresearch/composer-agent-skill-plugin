@@ -34,6 +34,15 @@ final class DiscoveredSkills
                 continue;
             }
             $kept = $byName[$name];
+            $keptDirect = str_starts_with((string) $kept['package'], 'direct:');
+            $newDirect = str_starts_with((string) $skill['package'], 'direct:');
+            if ($keptDirect !== $newDirect) {
+                throw new \RuntimeException(sprintf(
+                    'Duplicate skill name "%s" from %s and direct install. Fix composer.json / sources.',
+                    $name,
+                    $keptDirect ? 'direct skills' : 'composer package',
+                ));
+            }
             $output->writeln(sprintf(
                 '<comment>[NOTE] Duplicate skill name "%s": using %s v%s; skipping %s v%s.</comment>',
                 $name,

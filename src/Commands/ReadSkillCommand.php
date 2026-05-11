@@ -54,7 +54,15 @@ final class ReadSkillCommand extends BaseCommand
         $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
         $packageSkills = $discovery->discoverAllSkills();
         $directSkills = (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath));
-        $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        try {
+            $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        } catch (\RuntimeException $e) {
+            $output->writeln('');
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
+            $output->writeln('');
+
+            return self::FAILURE;
+        }
 
         // Find the requested skill
         $foundSkill = null;
