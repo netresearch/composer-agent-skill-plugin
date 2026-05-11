@@ -52,4 +52,3 @@ final class GitCli
         return self::mustRun(['ls-remote', '--tags', $url]);
     }
 }
-
