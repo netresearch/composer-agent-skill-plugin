@@ -373,6 +373,25 @@ Available skills:
 
 ---
 
+## Direct skills (non-Composer sources)
+
+Skills may also be installed **without** a Composer package by declaring **`extra.ai-agent-skills`** in the root `composer.json` and committing the generated **`composer.skills.lock`**.
+
+| Concern | Behaviour |
+| --- | --- |
+| CLI | `composer skills add|install|update|remove|list` and colon aliases `composer skills:add`, … (see ADR-010) |
+| Install vs update | **`composer install`** applies **only** the lock (pinned materialization). **`composer update`** (post-update hook) resolves floating refs and rewrites the lock. |
+| Trust | Same **`extra.ai-agent-skill.allow-skills`** map as package skills; keys `direct:<source>/<skill-name>`. `composer skills:trust` applies. |
+| Paths | Config `install-dir`, `sources-dir`, `cache-dir` and lock fields are **relative** and must not contain `..` or absolute segments; materialized paths must resolve under the project root. |
+| Git cache | Ephemeral clones use **`cache-dir`** (default `vendor/agent-skills/cache`). |
+| Disable | Environment variable **`COMPOSER_AGENT_SKILLS=0`** skips direct-skill sync. |
+
+**Supported resolver inputs** (MVP): GitHub HTTPS/SSH, `owner/repo` shorthand, GitHub tree URLs, and existing local project directories — not arbitrary non-GitHub `https://…/.git` URLs until explicitly implemented.
+
+User and maintainer documentation: [README](../README.md), [`docs/IMPLEMENTATION-DIRECT-SKILLS.md`](IMPLEMENTATION-DIRECT-SKILLS.md), ADRs **009–012**.
+
+---
+
 ## Package Discovery
 
 Uses Composer's runtime API for type-based package discovery.

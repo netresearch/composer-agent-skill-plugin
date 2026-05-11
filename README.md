@@ -3,7 +3,7 @@
 A Composer plugin that enables universal AI agent skill distribution and management for PHP projects. Automatically discovers, registers, and manages AI agent skills from Composer packages, providing a standardized way for the PHP ecosystem to share agent capabilities.
 
 [![CI](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-127%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-154%20passing-success)](tests/)
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%2010%20(max)-success)](phpstan.neon)
 [![PHP Version](https://img.shields.io/badge/php-%5E8.4-blue)](composer.json)
 [![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.4%20%7C%207.4%20%7C%208.0-blue)](composer.json)
@@ -12,11 +12,12 @@ A Composer plugin that enables universal AI agent skill distribution and managem
 ## Features
 
 - **Automatic Discovery**: Finds all packages with type `ai-agent-skill`
+- **Direct skills (optional)**: Install skills from **GitHub** or **local paths** without a Composer package — `extra.ai-agent-skills`, **`composer.skills.lock`**, and **`composer skills add|install|update|remove|list`** (see [Direct skills](#direct-skills-optional))
 - **AGENTS.md Generation**: Creates XML skill index compatible with [openskills](https://github.com/numman-ali/openskills)
-- **CLI Commands**: `composer list-skills` and `composer read-skill` for skill inspection
+- **CLI Commands**: `composer list-skills`, `composer read-skill`, trust helpers, and direct-skill **`composer skills:*`** commands
 - **Convention Over Configuration**: Works out of the box with zero configuration
 - **Progressive Disclosure**: Lightweight index, full details on demand
-- **Security First**: Rejects absolute paths, validates all skill metadata
+- **Security First**: Rejects unsafe paths, validates skill metadata (including descriptions bound for AGENTS.md)
 - **Multiple Skills Per Package**: Support for both single and multi-skill packages
 
 ## Installation
@@ -78,7 +79,65 @@ composer list-skills
 composer read-skill database-analyzer
 ```
 
-> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, and more.
+> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, direct skills (009–012), and more.
+
+## Direct skills (optional)
+
+Besides Composer packages, you can pin skills from **GitHub** or from a **directory inside the project** using `extra.ai-agent-skills` and a generated lockfile **`composer.skills.lock`**. Full technical notes: [`docs/IMPLEMENTATION-DIRECT-SKILLS.md`](docs/IMPLEMENTATION-DIRECT-SKILLS.md).
+
+### Requirements
+
+- **`git`** on `PATH` when using GitHub sources (clone/fetch).
+- Supported source strings match [`SourceResolver`](src/Source/SourceResolver.php): GitHub HTTPS/SSH, `owner/repo` shorthand, GitHub **tree** URLs, and existing local directories. **Generic non-GitHub git HTTPS URLs are not supported yet.**
+
+### Typical workflow
+
+```bash
+# Add a source and resolve skills into composer.skills.lock (writes composer.json + lock)
+composer skills:add vercel-labs/skills --skill=find-skills --ref=main
+
+# On CI or a fresh clone: install exactly what the lock pins (no implicit network update)
+composer install
+
+# After editing sources in composer.json: refresh the lock + installed files
+composer skills:update
+```
+
+Equivalent forms: `composer skills add …` and `composer skills:add …` (same for `install`, `update`, `remove`, `list`).
+
+### Configuration keys (`extra.ai-agent-skills`)
+
+| Key | Purpose |
+| --- | --- |
+| `version` | Schema version (currently `1`) |
+| `install-dir` | Where skill trees are materialized (default `vendor/agent-skills/installed/`) |
+| `cache-dir` | **Git clone** and temporary work directories (default `vendor/agent-skills/cache`) |
+| `sources-dir` | Declared directory prefix (included in the content-hash); clone cache uses **`cache-dir`**, not this path |
+| `sources` | List of sources (`type`: `path`, `github`, or `git` with `url` / `path` / `ref` / `skills`) |
+
+Relative directory keys must not use `..` or absolute paths. Lockfile `install-path` / `path` / path-type `url` fields are checked the same way so a tampered lock cannot write outside the project.
+
+### Trust for direct skills
+
+Direct skills use the **same** `extra.ai-agent-skill.allow-skills` map as packages. Keys look like:
+
+`direct:<source-name>/<skill-id>`
+
+Use `composer list-skills` to see the exact `package` column value, then:
+
+```bash
+composer skills:trust 'direct:vercel-labs/skills/find-skills'
+```
+
+See [ADR-012](docs/adr/012-skills-content-hash-and-trust.md): changing allow/deny does **not** change the lock **`content-hash`**; changing **sources** does.
+
+### Disable direct-skill sync
+
+Set environment variable:
+
+`COMPOSER_AGENT_SKILLS=0`
+
+…to skip direct-skill install/update hooks (legacy AGENTS.md behaviour is unchanged).
 
 ## Trust Model
 
@@ -126,7 +185,7 @@ composer skills:trust vendor/foo --revoke   # remove from the map (re-prompts ne
 composer skills:list-trust                  # show every persisted decision
 ```
 
-Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
+Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported. **Direct skills** use keys `direct:<source>/<skill-name>` in the same map — see [Direct skills](#direct-skills-optional).
 
 > ⚠️ **Glob matching is case-sensitive and `*` matches any characters within a pattern segment.** Composer normalizes published package names to lowercase, so write trust patterns in lowercase. A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. Exact-string keys always override matching globs, even when the glob was added first. Prefer explicit per-package entries when in doubt.
 

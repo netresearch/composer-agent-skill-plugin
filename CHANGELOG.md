@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Direct skill installation** — declare sources under `extra.ai-agent-skills`, pin them in **`composer.skills.lock`**, and materialize trees under `install-dir` (default `vendor/agent-skills/installed/`). CLI: **`composer skills`** dispatcher with **`skills:add`**, `skills:install`, `skills:update`, `skills:remove`, `skills:list` (see README, `docs/IMPLEMENTATION-DIRECT-SKILLS.md`, ADRs 009–012).
+- **Git cache directory** — ephemeral clones and worktrees use **`cache-dir`** (default `vendor/agent-skills/cache`). Config keys **`install-dir`**, **`sources-dir`**, and **`cache-dir`** plus lock path fields are validated (no `..`, no absolutes) so installs cannot escape the project root on a tampered lock.
+- **Shared trust store for direct skills** — allow/deny uses **`extra.ai-agent-skill.allow-skills`** with keys `direct:<source>/<skill-name>`; `composer skills:trust` / `list-skills` / `read-skill` behave like package skills.
+- **`DiscoveredSkills`** helper — merges package + direct discovery for `list-skills` / `read-skill` and prints a **`[NOTE]`** when the same skill name appears twice (package entry wins).
+- **`FilesystemUtil`** — `0755` directory mode, shared recursive tree removal with optional verbose IO diagnostics (replaces duplicated `rmTree` / `0777` usage).
+
 ### Changed
 
 ### Fixed

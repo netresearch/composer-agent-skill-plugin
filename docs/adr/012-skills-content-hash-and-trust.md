@@ -8,7 +8,7 @@
 The Direct Skill spec introduces:
 
 - `extra.ai-agent-skills` — declarative **sources** (intent).
-- Optional `extra.ai-agent-skills.trust` — **operational** allow/deny style decisions for direct skills, analogous to `extra.ai-agent-skill.allow-skills` for Composer packages.
+- **Trust persistence** — operational allow/deny for direct skills uses the **same** `extra.ai-agent-skill.allow-skills` map as Composer packages, with keys like `direct:<source>/<skill-name>`. There is **no** separate `extra.ai-agent-skills.trust` object in the shipped implementation (an earlier sketch mentioned it; the hash and README/PRD describe the actual store).
 
 The lockfile `content-hash` must detect when **sources** (and paths/refs) drift from the lock. Trust toggles should **not** force a lock refresh every time a developer runs `composer skills:trust` / adjusts trust flags — that would churn `composer.skills.lock` and create meaningless merge conflicts.
 
@@ -21,7 +21,7 @@ The lockfile `content-hash` must detect when **sources** (and paths/refs) drift 
 
 2. **Exclude from content-hash input**:
 
-   - **`trust`** (and any future sibling operational maps under `extra.ai-agent-skills`).
+   - Any **`trust`** key (or future operational-only maps) under `extra.ai-agent-skills` — **not used** in the current implementation, but excluded from the hash if present so experiments do not churn the lock.
    - **`extra.ai-agent-skill`** entirely — including `allow-skills` — consistent with the spec’s note that Composer-package trust is separate; direct-skills hash must remain scoped to the **sources** subtree only.
 
    **Implementation note (persistence):** Direct skills are not granted a separate trust map in `composer.json`. Allow/deny decisions use the same `extra.ai-agent-skill.allow-skills` mechanism as Composer packages, with keys shaped like `direct:<source>/<skill-name>` (see `DirectInstalledSkillDiscovery` and `SkillTrustManager`). The ADR’s “exclude allow-skills from the hash” rule still applies: those keys must not affect `content-hash`.
