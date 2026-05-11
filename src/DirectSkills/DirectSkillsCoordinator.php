@@ -19,6 +19,7 @@ use Netresearch\ComposerAgentSkillPlugin\Source\SourceResolver;
 use Netresearch\ComposerAgentSkillPlugin\Util\ComposerJsonReader;
 use Netresearch\ComposerAgentSkillPlugin\Util\FilesystemUtil;
 use Netresearch\ComposerAgentSkillPlugin\Util\GitCli;
+use Netresearch\ComposerAgentSkillPlugin\Util\GitSemverResolver;
 use Netresearch\ComposerAgentSkillPlugin\Util\SkillMarkdownParser;
 
 /**
@@ -270,7 +271,8 @@ final class DirectSkillsCoordinator
         if ($url === null) {
             throw new DirectSkillsException('Resolved git source without URL.');
         }
-        $ref = $resolved->ref ?? 'main';
+        $storedRef = $resolved->ref ?? 'main';
+        $cloneRef = GitSemverResolver::resolveToGitRef($url, $storedRef);
         $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->cacheDir);
         $slug = substr(hash('sha256', $url), 0, 16);
         $workDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . 'work';
@@ -279,14 +281,14 @@ final class DirectSkillsCoordinator
             mkdir(dirname($workDir), FilesystemUtil::DIRECTORY_MODE, true);
         }
         try {
-            GitCli::mustRun(['clone', '--quiet', '--depth', '1', '--branch', $ref, $url, $workDir]);
+            GitCli::mustRun(['clone', '--quiet', '--depth', '1', '--branch', $cloneRef, $url, $workDir]);
         } catch (\RuntimeException) {
             FilesystemUtil::removeDirectoryTree($workDir, $io);
             if (!is_dir(dirname($workDir))) {
                 mkdir(dirname($workDir), FilesystemUtil::DIRECTORY_MODE, true);
             }
             $this->gitMustRun(['clone', '--quiet', $url, $workDir]);
-            $this->gitMustRun(['checkout', '--quiet', $ref], $workDir);
+            $this->gitMustRun(['checkout', '--quiet', $cloneRef], $workDir);
         }
         $commit = $this->gitRevParseHead($workDir);
 
@@ -322,7 +324,7 @@ final class DirectSkillsCoordinator
                 $entry->name,
                 $entry->type,
                 $url,
-                $ref,
+                $storedRef,
                 $commit,
                 $pathInSource,
                 $checksum,

@@ -9,9 +9,12 @@ use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\IO\IOInterface;
 use Composer\Plugin\Capability\CommandProvider;
 use Composer\Plugin\Capable;
+use Composer\Plugin\CommandEvent;
+use Composer\Plugin\PluginEvents;
 use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 use Composer\Script\ScriptEvents;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsOutdatedComposerHook;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsCoordinator;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\DirectSkillsException;
 use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
@@ -28,17 +31,22 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
 {
     private IOInterface $io;
 
+    private ?Composer $composer = null;
+
     public function activate(Composer $composer, IOInterface $io): void
     {
+        $this->composer = $composer;
         $this->io = $io;
     }
 
     public function deactivate(Composer $composer, IOInterface $io): void
     {
+        $this->composer = null;
     }
 
     public function uninstall(Composer $composer, IOInterface $io): void
     {
+        $this->composer = null;
     }
 
     /**
@@ -59,7 +67,13 @@ final class SkillPlugin implements PluginInterface, Capable, EventSubscriberInte
         return [
             ScriptEvents::POST_INSTALL_CMD => 'onPostInstall',
             ScriptEvents::POST_UPDATE_CMD => 'onPostUpdate',
+            PluginEvents::COMMAND => 'onPluginCommand',
         ];
+    }
+
+    public function onPluginCommand(CommandEvent $event): void
+    {
+        DirectSkillsOutdatedComposerHook::registerAfterOutdatedStyleShow($event, $this->composer, $this->io);
     }
 
     public function onPostInstall(Event $event): void

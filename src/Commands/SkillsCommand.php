@@ -7,6 +7,7 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsCoordinator;
+use Netresearch\ComposerAgentSkillPlugin\DirectSkills\DirectSkillsOutdatedChecker;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\DirectSkillsException;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\MissingSkillsLockException;
 use Netresearch\ComposerAgentSkillPlugin\DirectSkills\Exception\StaleSkillsLockException;
@@ -42,7 +43,7 @@ final class SkillsCommand extends BaseCommand
         } else {
             $this->setName('skills')
                 ->setDescription('Manage directly installed AI agent skills (non-Composer packages)')
-                ->addArgument('subcommand', InputArgument::OPTIONAL, 'add|install|update|remove|list', 'list')
+                ->addArgument('subcommand', InputArgument::OPTIONAL, 'add|install|update|remove|list|outdated', 'list')
                 ->addArgument('args', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Arguments for the subcommand');
             $this->configureSharedOptions();
         }
@@ -56,6 +57,7 @@ final class SkillsCommand extends BaseCommand
             'update' => 'Resolve sources and refresh composer.skills.lock',
             'remove' => 'Remove a direct skill or source from composer.json',
             'list' => 'List configured direct skill sources',
+            'outdated' => 'List direct skills whose lock pin is behind remote or local path content',
             default => 'Direct skills helper',
         };
     }
@@ -65,11 +67,20 @@ final class SkillsCommand extends BaseCommand
         $this->configureSharedOptions();
         match ($sub) {
             'add' => $this
-                ->addArgument('source', InputArgument::REQUIRED, 'GitHub HTTPS/SSH, owner/repo shorthand, GitHub tree URL, or local path (generic non-GitHub git remotes are not supported)'),
+                ->addArgument('source', InputArgument::REQUIRED, 'GitHub HTTPS/SSH, owner/repo[:ref] (ref = branch/tag or semver ^/~/…), tree URL, or local path (non-GitHub git URLs not supported)'),
             'remove' => $this
                 ->addArgument('name', InputArgument::REQUIRED, 'Skill name or source name'),
+            'outdated' => $this->configureOutdatedOptions(),
             default => null,
         };
+    }
+
+    private function configureOutdatedOptions(): static
+    {
+        $this->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'Output format: text or json', 'text')
+            ->addOption('strict', null, InputOption::VALUE_NONE, 'Exit with status 1 if any direct skill is outdated (CI)');
+
+        return $this;
     }
 
     private function configureSharedOptions(): void
@@ -107,6 +118,7 @@ final class SkillsCommand extends BaseCommand
                 'update' => $this->runUpdate($io, $projectRoot, $coord),
                 'remove' => $this->runRemove($io, $input, $output, $projectRoot, $composerJsonPath, $coord),
                 'list' => $this->runList($output, $composerJsonPath),
+                'outdated' => $this->runOutdated($io, $input, $output, $projectRoot, $coord),
                 default => $this->badSubcommand($output, $sub),
             };
         } catch (MissingSkillsLockException | StaleSkillsLockException $e) {
@@ -122,7 +134,7 @@ final class SkillsCommand extends BaseCommand
 
     private function badSubcommand(OutputInterface $output, string $sub): int
     {
-        $output->writeln(sprintf('<error>Unknown skills subcommand "%s". Try: add, install, update, remove, list.</error>', $sub));
+        $output->writeln(sprintf('<error>Unknown skills subcommand "%s". Try: add, install, update, remove, list, outdated.</error>', $sub));
 
         return 7;
     }
@@ -264,6 +276,49 @@ final class SkillsCommand extends BaseCommand
         $output->writeln('<info>Done.</info>');
 
         return 0;
+    }
+
+    private function runOutdated(
+        ConsoleIO $io,
+        InputInterface $input,
+        OutputInterface $output,
+        string $projectRoot,
+        DirectSkillsCoordinator $coord,
+    ): int {
+        if ($coord->isDisabledByEnv()) {
+            $io->writeError('<comment>COMPOSER_AGENT_SKILLS=0 — skipping direct skill outdated check.</comment>');
+
+            return 0;
+        }
+        $formatOpt = $input->getOption('format');
+        $format = is_string($formatOpt) ? $formatOpt : 'text';
+        if (!in_array($format, ['text', 'json'], true)) {
+            $output->writeln('<error>Format must be text or json.</error>');
+
+            return 7;
+        }
+        $checker = new DirectSkillsOutdatedChecker();
+        $rows = $checker->collectOutdated($projectRoot, $io);
+        if ($format === 'json') {
+            $output->writeln(json_encode(['outdated' => $rows], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } elseif ($rows === []) {
+            $output->writeln('<info>No outdated direct agent skills.</info>');
+        } else {
+            $output->writeln('<comment>Outdated direct agent skills:</comment>');
+            foreach ($rows as $r) {
+                $ref = $r['ref'] !== null && $r['ref'] !== '' ? sprintf(' [%s]', $r['ref']) : '';
+                $output->writeln(sprintf(
+                    '  <fg=yellow>!</> %s%s  %s → %s',
+                    $r['name'],
+                    $ref,
+                    $r['installed'],
+                    $r['latest'],
+                ));
+            }
+        }
+        $strict = (bool) $input->getOption('strict');
+
+        return ($strict && $rows !== []) ? 1 : 0;
     }
 
     private function runList(OutputInterface $output, string $composerJsonPath): int

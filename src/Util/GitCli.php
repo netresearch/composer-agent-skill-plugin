@@ -43,4 +43,13 @@ final class GitCli
     {
         return self::mustRun(['rev-parse', 'HEAD'], $repoDir);
     }
+
+    /**
+     * Raw output of `git ls-remote --tags <url>` (one line per ref).
+     */
+    public static function lsRemoteTags(string $url): string
+    {
+        return self::mustRun(['ls-remote', '--tags', $url]);
+    }
 }
+

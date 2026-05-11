@@ -31,6 +31,7 @@ final class CommandCapability implements CommandProvider
             new SkillsCommand('update'),
             new SkillsCommand('remove'),
             new SkillsCommand('list'),
+            new SkillsCommand('outdated'),
         ];
     }
 }

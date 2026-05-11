@@ -64,6 +64,18 @@ final class SourceResolver
             return new ResolvedSource($name, 'github', $url, $refCli, null);
         }
 
+        // owner/repo:ref — ref may be a branch/tag or a semver constraint (^1.2, ~2, >=1,<2, …)
+        if (preg_match('#^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+):(.+)$#', $input, $m)) {
+            $owner = $m[1];
+            $repo = preg_replace('/\.git$/', '', $m[2]);
+            $suffix = trim($m[3]);
+            $url = sprintf('https://github.com/%s/%s.git', $owner, $repo);
+            $name = $nameOverride ?? $owner . '/' . $repo;
+            $ref = $refCli ?? $suffix;
+
+            return new ResolvedSource($name, 'github', $url, $ref, null);
+        }
+
         // owner/repo shorthand
         if (preg_match('#^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)$#', $input, $m)) {
             $owner = $m[1];

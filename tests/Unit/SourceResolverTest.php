@@ -31,6 +31,13 @@ final class SourceResolverTest extends TestCase
         self::assertSame('https://github.com/octocat/Hello-World.git', $r->url);
     }
 
+    public function testGithubShorthandWithEmbeddedSemverConstraint(): void
+    {
+        $r = $this->resolver->resolve('octocat/Hello-World:^1.0');
+        self::assertSame('https://github.com/octocat/Hello-World.git', $r->url);
+        self::assertSame('^1.0', $r->ref);
+    }
+
     public function testTildePathUsesHome(): void
     {
         $home = sys_get_temp_dir() . '/resolver-home-' . bin2hex(random_bytes(4));
