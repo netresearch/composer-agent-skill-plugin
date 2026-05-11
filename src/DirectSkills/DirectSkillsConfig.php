@@ -90,6 +90,10 @@ final class DirectSkillsConfig
             }
         }
 
+        DirectSkillsPathGuard::assertConfigRelativeDir('extra.ai-agent-skills.install-dir', $installDir);
+        DirectSkillsPathGuard::assertConfigRelativeDir('extra.ai-agent-skills.sources-dir', $sourcesDir);
+        DirectSkillsPathGuard::assertConfigRelativeDir('extra.ai-agent-skills.cache-dir', $cacheDir);
+
         return new self($version, $installDir, $sourcesDir, $cacheDir, $sources);
     }
 }

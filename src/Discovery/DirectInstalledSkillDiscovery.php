@@ -18,7 +18,17 @@ use Netresearch\ComposerAgentSkillPlugin\Util\SkillMarkdownParser;
 final class DirectInstalledSkillDiscovery
 {
     /**
-     * @return list<array{name: string, description: string, location: string, package: string, version: string, file: string, trust_state: TrustState}>
+     * @return list<array{
+     *     name: string,
+     *     description: string,
+     *     location: string,
+     *     package: string,
+     *     version: string,
+     *     file: string,
+     *     trust_state: TrustState,
+     *     direct_source: string,
+     *     direct_pin: string
+     * }>
      */
     public function discoverInstalled(IOInterface $io, SkillTrustManager $trust, string $projectRoot): array
     {

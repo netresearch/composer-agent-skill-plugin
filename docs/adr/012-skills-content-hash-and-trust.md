@@ -24,6 +24,8 @@ The lockfile `content-hash` must detect when **sources** (and paths/refs) drift 
    - **`trust`** (and any future sibling operational maps under `extra.ai-agent-skills`).
    - **`extra.ai-agent-skill`** entirely — including `allow-skills` — consistent with the spec’s note that Composer-package trust is separate; direct-skills hash must remain scoped to the **sources** subtree only.
 
+   **Implementation note (persistence):** Direct skills are not granted a separate trust map in `composer.json`. Allow/deny decisions use the same `extra.ai-agent-skill.allow-skills` mechanism as Composer packages, with keys shaped like `direct:<source>/<skill-name>` (see `DirectInstalledSkillDiscovery` and `SkillTrustManager`). The ADR’s “exclude allow-skills from the hash” rule still applies: those keys must not affect `content-hash`.
+
 3. **Normalization rules** (must be implemented exactly and tested):
 
    - Stable key ordering when serializing for hashing (e.g. recursive ksort).

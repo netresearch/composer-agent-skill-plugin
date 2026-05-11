@@ -47,7 +47,13 @@ final class FilesystemSkillDiscovery
             if ($this->pathContainsIgnoredDir($rootAbsolute, $skillDir)) {
                 continue;
             }
-            $relativeFromRoot = ltrim(str_replace($rootAbsolute, '', $skillDir), DIRECTORY_SEPARATOR);
+            $prefix = $rootAbsolute . DIRECTORY_SEPARATOR;
+            if ($skillDir !== $rootAbsolute && !str_starts_with($skillDir . DIRECTORY_SEPARATOR, $prefix)) {
+                continue;
+            }
+            $relativeFromRoot = $skillDir === $rootAbsolute
+                ? ''
+                : substr($skillDir, strlen($prefix));
             $relativeForward = str_replace(DIRECTORY_SEPARATOR, '/', $relativeFromRoot);
             $found[] = [
                 'relativePath' => $relativeForward === '' ? '.' : $relativeForward,

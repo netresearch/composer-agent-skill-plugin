@@ -18,6 +18,7 @@ final class SourceResolver
         if ($input === '') {
             throw new \InvalidArgumentException('Empty source.');
         }
+        $input = $this->expandUserHome($input);
 
         // Local path
         if ($this->looksLikePath($input)) {
@@ -66,7 +67,7 @@ final class SourceResolver
         // owner/repo shorthand
         if (preg_match('#^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)$#', $input, $m)) {
             $owner = $m[1];
-            $repo = $m[2];
+            $repo = preg_replace('/\.git$/', '', $m[2]);
             $url = sprintf('https://github.com/%s/%s.git', $owner, $repo);
             $name = $nameOverride ?? $owner . '/' . $repo;
 
@@ -82,5 +83,27 @@ final class SourceResolver
             || str_starts_with($input, '/')
             || str_starts_with($input, '~')
             || (strlen($input) > 1 && $input[1] === ':'); // Windows drive
+    }
+
+    private function expandUserHome(string $input): string
+    {
+        if (!str_starts_with($input, '~')) {
+            return $input;
+        }
+        $home = getenv('HOME');
+        if (!is_string($home) || $home === '') {
+            $home = getenv('USERPROFILE');
+        }
+        if (!is_string($home) || $home === '') {
+            return $input;
+        }
+        if ($input === '~') {
+            return $home;
+        }
+        if (str_starts_with($input, '~/') || str_starts_with($input, '~\\')) {
+            return $home . substr($input, 1);
+        }
+
+        return $input;
     }
 }

@@ -65,7 +65,7 @@ final class SkillsCommand extends BaseCommand
         $this->configureSharedOptions();
         match ($sub) {
             'add' => $this
-                ->addArgument('source', InputArgument::REQUIRED, 'GitHub shorthand, git URL, or local path'),
+                ->addArgument('source', InputArgument::REQUIRED, 'GitHub HTTPS/SSH, owner/repo shorthand, GitHub tree URL, or local path (generic non-GitHub git remotes are not supported)'),
             'remove' => $this
                 ->addArgument('name', InputArgument::REQUIRED, 'Skill name or source name'),
             default => null,

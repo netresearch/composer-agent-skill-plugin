@@ -21,7 +21,7 @@ final class SkillMarkdownParser
         if ($content === false) {
             return null;
         }
-        if (!preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
+        if (!preg_match('/^---\s*\R(.*?)\R---\s*\R/s', $content, $matches)) {
             return null;
         }
         try {
@@ -37,7 +37,7 @@ final class SkillMarkdownParser
         if (!is_string($name) || !is_string($desc) || trim($name) === '' || trim($desc) === '') {
             return null;
         }
-        if (!preg_match('/^[a-z0-9-]{1,64}$/', $name)) {
+        if (SkillFrontmatterValidator::validateNameAndDescriptionStrings($name, $desc) !== null) {
             return null;
         }
 

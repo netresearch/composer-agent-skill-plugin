@@ -25,6 +25,33 @@ final class SourceResolverTest extends TestCase
         self::assertNull($r->path);
     }
 
+    public function testGithubShorthandStripsTrailingGitSuffix(): void
+    {
+        $r = $this->resolver->resolve('octocat/Hello-World.git');
+        self::assertSame('https://github.com/octocat/Hello-World.git', $r->url);
+    }
+
+    public function testTildePathUsesHome(): void
+    {
+        $home = sys_get_temp_dir() . '/resolver-home-' . bin2hex(random_bytes(4));
+        mkdir($home . '/skill-root', 0777, true);
+        $prev = getenv('HOME');
+        putenv('HOME=' . $home);
+        try {
+            $r = $this->resolver->resolve('~/skill-root');
+            self::assertSame('path', $r->type);
+            self::assertSame(realpath($home . '/skill-root'), $r->path);
+        } finally {
+            if ($prev === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $prev);
+            }
+            @rmdir($home . '/skill-root');
+            @rmdir($home);
+        }
+    }
+
     public function testGithubTreeUrlExtractsRefAndPath(): void
     {
         $r = $this->resolver->resolve('https://github.com/foo/bar/tree/main/skills/hello');

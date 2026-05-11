@@ -142,14 +142,22 @@ final class DirectSkillsCoordinator
      */
     private function materializePackage(IOInterface $io, string $projectRoot, DirectSkillsConfig $cfg, LockedSkillPackage $pkg): void
     {
+        DirectSkillsPathGuard::assertLockRelativePosix('install-path', $pkg->installPath, false);
+        DirectSkillsPathGuard::assertLockRelativePosix('path', $pkg->pathInSource, true);
+
         $installAbs = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $pkg->installPath);
+        DirectSkillsPathGuard::assertResolvedUnderProject($projectRoot, $installAbs);
+
         if ($pkg->type === 'path') {
-            $basePath = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $pkg->url);
+            $urlRel = (string) $pkg->url;
+            DirectSkillsPathGuard::assertLockRelativePosix('url', $urlRel, false);
+            $basePath = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $urlRel);
             $skillDir = $basePath . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $pkg->pathInSource);
             $skillDir = realpath($skillDir) ?: $skillDir;
             if (!is_dir($skillDir)) {
                 throw new DirectSkillsException(sprintf('Path skill source missing: %s', $skillDir));
             }
+            DirectSkillsPathGuard::assertResolvedUnderProject($projectRoot, $skillDir);
             $this->copier->copyInto($skillDir, $installAbs, $io);
             $sum = $this->skillHasher->hashSkillDirectory($installAbs);
             if ($sum !== $pkg->checksum) {
@@ -163,7 +171,7 @@ final class DirectSkillsCoordinator
         if ($url === null || $url === '') {
             throw new DirectSkillsException(sprintf('Locked package %s has no clone URL.', $pkg->name));
         }
-        $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->sourcesDir);
+        $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->cacheDir);
         $slug = substr(hash('sha256', $url), 0, 16);
         $repoDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . $pkg->commit;
         $this->ensureGitCheckout($io, $url, $pkg->commit, $repoDir);
@@ -173,6 +181,7 @@ final class DirectSkillsCoordinator
         if (!is_dir($inside)) {
             throw new DirectSkillsException(sprintf('Skill path not found in clone: %s', $pkg->pathInSource));
         }
+        DirectSkillsPathGuard::assertResolvedUnderProject($projectRoot, $inside);
         $this->copier->copyInto($inside, $installAbs, $io);
         $sum = $this->skillHasher->hashSkillDirectory($installAbs);
         if ($sum !== $pkg->checksum) {
@@ -262,7 +271,7 @@ final class DirectSkillsCoordinator
             throw new DirectSkillsException('Resolved git source without URL.');
         }
         $ref = $resolved->ref ?? 'main';
-        $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->sourcesDir);
+        $cacheRoot = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cfg->cacheDir);
         $slug = substr(hash('sha256', $url), 0, 16);
         $workDir = $cacheRoot . DIRECTORY_SEPARATOR . $slug . DIRECTORY_SEPARATOR . 'work';
         FilesystemUtil::removeDirectoryTree($workDir, $io);
