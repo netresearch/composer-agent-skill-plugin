@@ -9,6 +9,7 @@ use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\Package\PackageProvider;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
+use Netresearch\ComposerAgentSkillPlugin\Util\SkillFrontmatterValidator;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -395,45 +396,7 @@ final class SkillDiscovery
         $name = $frontmatter['name'];
         $description = $frontmatter['description'];
 
-        // Validate name format (kebab-case)
-        if (!preg_match('/^[a-z0-9-]{1,64}$/', $name)) {
-            return sprintf(
-                "Invalid name format '%s'. Must be lowercase letters, numbers, and hyphens only (max 64 chars).",
-                $name
-            );
-        }
-
-        // Validate name length
-        if (strlen($name) > 64) {
-            return sprintf("Name '%s' exceeds maximum length of 64 characters.", $name);
-        }
-
-        // Validate description length
-        if (strlen($description) > 1024) {
-            return sprintf("Description exceeds maximum length of 1024 characters (%d chars).", strlen($description));
-        }
-
-        // SECURITY: reject control characters and bidi overrides in the description.
-        // The description is rendered into AGENTS.md inside <description>...</description>
-        // tags via htmlspecialchars(ENT_XML1|ENT_QUOTES) — but htmlspecialchars does NOT
-        // strip newlines or control chars. A description containing "\n</description>\n
-        // <skill><name>evil</name>" would forge a second skill entry that an AI agent
-        // reads as legitimate. Plus U+202E and friends produce visually misleading
-        // strings that look one way but are read another by the agent.
-        //
-        // We reject the *entire* C0 range 0x00-0x1F plus DEL 0x7F. That includes
-        // tab (0x09), LF (0x0A), and CR (0x0D) — the most dangerous attack vectors,
-        // since they break out of the single-line containment that AGENTS.md
-        // assumes. Descriptions are meant to be short single-paragraph blurbs,
-        // so disallowing all whitespace-control codepoints is the conservative choice.
-        // Also reject the bidi override range U+202A-U+202E and U+2066-U+2069.
-        if (preg_match('/[\x00-\x1F\x7F]/u', $description) === 1
-            || preg_match('/\x{202A}|\x{202B}|\x{202C}|\x{202D}|\x{202E}|\x{2066}|\x{2067}|\x{2068}|\x{2069}/u', $description) === 1
-        ) {
-            return 'Description contains control characters or bidi-override codepoints.';
-        }
-
-        return null;
+        return SkillFrontmatterValidator::validateNameAndDescriptionStrings($name, $description);
     }
 
     /**

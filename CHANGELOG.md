@@ -9,9 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`composer outdated` + direct skills** — after Composer’s package table (text mode), lists direct skills whose lock pin lags **`git ls-remote`** or local path content; JSON mode keeps package JSON valid and points to **`composer skills:outdated -f json`**. New command **`composer skills:outdated`** (`--strict` for CI exit 1).
+- **Semver constraints on GitHub refs** — `owner/repo:^1.2` or `--ref='^1.2'` resolves to the highest remote **tag** matching the constraint (`composer/semver` + `git ls-remote --tags`); **`composer update`** re-resolves and refreshes **`composer.skills.lock`** while **`composer install`** keeps the pinned commit.
+- **Direct skill installation** — declare sources under `extra.ai-agent-skills`, pin them in **`composer.skills.lock`**, and materialize trees under `install-dir` (default `vendor/agent-skills/installed/`). CLI: **`composer skills`** dispatcher with **`skills:add`**, `skills:install`, `skills:update`, `skills:remove`, `skills:list` (see README, `docs/IMPLEMENTATION-DIRECT-SKILLS.md`, ADRs 009–012).
+- **Git cache directory** — ephemeral clones and worktrees use **`cache-dir`** (default `vendor/agent-skills/cache`). Config keys **`install-dir`**, **`sources-dir`**, and **`cache-dir`** plus lock path fields are validated (no `..`, no absolutes) so installs cannot escape the project root on a tampered lock.
+- **Shared trust store for direct skills** — allow/deny uses **`extra.ai-agent-skill.allow-skills`** with keys `direct:<source>/<skill-name>`; `composer skills:trust` / `list-skills` / `read-skill` behave like package skills.
+- **`DiscoveredSkills`** helper — merges package + direct discovery for `list-skills` / `read-skill`; duplicate names within Composer packages keep the first and print a **`[NOTE]`**, while a **package vs direct** name collision now errors (aligned with `SkillPlugin` / AGENTS.md generation).
+- **`FilesystemUtil`** — `0755` directory mode, shared recursive tree removal with optional verbose IO diagnostics (replaces duplicated `rmTree` / `0777` usage).
+
 ### Changed
 
 ### Fixed
+
+- **Direct skills security hardening** — reject **symlinks** when copying and hashing skill trees; validate **`composer.skills.lock`** git commits as **40-char hex** before using them as cache path segments; allow path-source **`url: "."`** in the lock; validate clone/tag refs so they cannot start with `-` (git CLI ambiguity). Note: `git checkout -- <rev>` is not used because Git treats a lone argument after `--` as a **pathspec**, not a revision.
+- **PR review follow-ups** — GitHub HTTPS repo URLs may contain **dots** in the name (regex delimiter fix); **strict project-root prefix** for stored path sources (no sibling-directory false positives); **`skills:outdated`** validates lock **`url` / `path` / `install-path`** like install does so a tampered lock cannot drive reads outside the project.
 
 ## [2.0.0] - 2026-05-01
 

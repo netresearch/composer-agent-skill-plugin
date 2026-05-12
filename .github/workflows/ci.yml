@@ -68,7 +68,10 @@ jobs:
           # shellcheck disable=SC2086
           composer update --prefer-dist --no-progress ${UPDATE_FLAGS}
 
-      - name: Run tests
+      - name: Run tests (incl. @group network — GitHub + git)
+        env:
+          # Set to 1 only in air-gapped environments; default runs live clone tests.
+          SKIP_NETWORK_TESTS: ${{ vars.SKIP_NETWORK_TESTS }}
         run: vendor/bin/phpunit --testdox
 
   code-quality:

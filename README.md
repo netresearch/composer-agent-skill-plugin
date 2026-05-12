@@ -1,9 +1,9 @@
 # Composer AI Agent Skill Plugin
 
-A Composer plugin that enables universal AI agent skill distribution and management for PHP projects. Automatically discovers, registers, and manages AI agent skills from Composer packages, providing a standardized way for the PHP ecosystem to share agent capabilities.
+A Composer plugin for **AI agent skills** in PHP projects. Skills are **skill dependencies** of your repo: you declare them through **one or more** of the mechanisms below (they are equivalent in the sense that everything flows into the same discovery, trust, and **`AGENTS.md`** pipeline—you may **combine** them). Versioning and publishing differ (semver packages vs pinned git lock), not whether the path is “official.”
 
 [![CI](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/netresearch/composer-agent-skill-plugin/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-127%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-164%20passing-success)](tests/)
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%2010%20(max)-success)](phpstan.neon)
 [![PHP Version](https://img.shields.io/badge/php-%5E8.4-blue)](composer.json)
 [![Symfony](https://img.shields.io/badge/symfony-5.4%20%7C%206.4%20%7C%207.4%20%7C%208.0-blue)](composer.json)
@@ -11,12 +11,13 @@ A Composer plugin that enables universal AI agent skill distribution and managem
 
 ## Features
 
-- **Automatic Discovery**: Finds all packages with type `ai-agent-skill`
-- **AGENTS.md Generation**: Creates XML skill index compatible with [openskills](https://github.com/numman-ali/openskills)
-- **CLI Commands**: `composer list-skills` and `composer read-skill` for skill inspection
+- **Three ways to bring skills in** — see [How skills enter your project](#how-skills-enter-your-project): (1) `composer require` a **`type: ai-agent-skill`** package, (2) `composer require` **any package** that lists skills under **`extra.ai-agent-skill`**, (3) declare **GitHub or in-repo paths** under **`extra.ai-agent-skills`** with **`composer.skills.lock`** and **`composer skills …`** ([Direct sources](#direct-sources-github-and-project-paths)).
+- **Automatic discovery**: Finds skills from installed packages (legacy type and universal `extra` form).
+- **AGENTS.md generation**: Creates XML skill index compatible with [openskills](https://github.com/numman-ali/openskills)
+- **CLI commands**: `composer list-skills`, `composer read-skill`, trust helpers, **`composer skills:*`** for direct sources, and **`composer outdated`** appends direct-skill rows (text) or points to **`composer skills:outdated`**
 - **Convention Over Configuration**: Works out of the box with zero configuration
 - **Progressive Disclosure**: Lightweight index, full details on demand
-- **Security First**: Rejects absolute paths, validates all skill metadata
+- **Security First**: Rejects unsafe paths, validates skill metadata (including descriptions bound for AGENTS.md)
 - **Multiple Skills Per Package**: Support for both single and multi-skill packages
 
 ## Installation
@@ -48,6 +49,12 @@ For CI/CD or non-interactive environments, pre-authorize the plugin in your `com
 }
 ```
 
+## How skills enter your project
+
+1. **`composer require` a dedicated skill package** — `type: ai-agent-skill` (classic).
+2. **`composer require` any package that ships skills** — `extra.ai-agent-skill` on libraries, bundles, etc. ([universal discovery](docs/adr/001-universal-discovery.md)).
+3. **Direct sources** — root [`extra.ai-agent-skills`](docs/IMPLEMENTATION-DIRECT-SKILLS.md) + **`composer.skills.lock`** + **`composer skills …`**. Same trust / `AGENTS.md` pipeline as (1) and (2); you can use **several** of these together.
+
 ## Quick Start
 
 ### 1. Install Skill Packages
@@ -78,7 +85,87 @@ composer list-skills
 composer read-skill database-analyzer
 ```
 
-> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, and more.
+> **Design rationale**: see [docs/adr/](docs/adr/) for short Architecture Decision Records covering universal discovery, the trust prompt design, atomic-write persistence, glob semantics, direct skills (009–012), and more.
+
+## Direct sources: GitHub and project paths
+
+Path (3) above: pin skills from **GitHub** or from a **directory inside the project** using `extra.ai-agent-skills` and a generated lockfile **`composer.skills.lock`**. Full technical notes: [`docs/IMPLEMENTATION-DIRECT-SKILLS.md`](docs/IMPLEMENTATION-DIRECT-SKILLS.md).
+
+### Requirements
+
+- **`git`** on `PATH` when using GitHub sources (clone/fetch).
+- Supported source strings match [`SourceResolver`](src/Source/SourceResolver.php): GitHub HTTPS/SSH, `owner/repo` shorthand (with optional `:ref` suffix), GitHub **tree** URLs, and existing local directories. **Generic non-GitHub git HTTPS URLs are not supported yet.**
+
+### Semver on git tags (like `composer require`)
+
+For GitHub shorthand (or `--ref`), you can use **Composer-style semver constraints** against **annotated/lightweight tags** on the remote (`git ls-remote --tags`). Examples:
+
+```bash
+# Highest tag satisfying ^1.2 (e.g. 1.2.6), stored as ref "^1.2" in composer.json; lock pins the commit
+composer skills:add acme/some-skill-repo:^1.2 --skill=my-skill
+
+# Same, via flag
+composer skills:add acme/some-skill-repo --skill=my-skill --ref='^1.2'
+```
+
+On **`composer update`**, the plugin’s post-update hook **re-resolves** the constraint against current remote tags and refreshes **`composer.skills.lock`** (same idea as relaxing a lock when you bump constraints—here the constraint lives in `extra.ai-agent-skills.sources[].ref`). **`composer install`** still applies the **pinned commit** from the lock only.
+
+Constraints are detected when the ref contains semver operators (`^`, `~`, `*`, `>=`, ranges with `,` / `||`, etc.). Plain names like `main` or `v1.2.3` are still treated as **literal git refs**.
+
+### Outdated checks (`composer outdated` and `composer skills:outdated`)
+
+- **`composer outdated`** (same as `composer show --latest --outdated`) lists Composer packages as usual. When you use **text** output, this plugin appends a short block for **direct agent skills** whose **`composer.skills.lock`** pin is behind the current **remote git tip** (for semver, branch, or tag sources) or whose **path** skill content hash changed on disk. Resolving uses **`git ls-remote`** (read-only); failures are skipped with a comment on stderr.
+- **`composer outdated -f json`** must stay valid JSON for package rows only. If direct skills are stale, the plugin prints a **stderr notice**; run **`composer skills:outdated -f json`** for a machine-readable `{"outdated":[…]}` document.
+- **`composer skills:outdated`** — full list; add **`--strict`** for exit code **1** when anything is outdated (handy in CI). **`composer outdated --strict`** still reflects **Composer packages only** (unchanged upstream behaviour).
+
+### Typical workflow
+
+```bash
+# Add a source and resolve skills into composer.skills.lock (writes composer.json + lock)
+composer skills:add vercel-labs/skills --skill=find-skills --ref=main
+
+# On CI or a fresh clone: install exactly what the lock pins (no implicit network update)
+composer install
+
+# After editing sources in composer.json: refresh the lock + installed files
+composer skills:update
+```
+
+Equivalent forms: `composer skills add …` and `composer skills:add …` (same for `install`, `update`, `remove`, `list`, `outdated`).
+
+### Configuration keys (`extra.ai-agent-skills`)
+
+| Key | Purpose |
+| --- | --- |
+| `version` | Schema version (currently `1`) |
+| `install-dir` | Where skill trees are materialized (default `vendor/agent-skills/installed/`) |
+| `cache-dir` | **Git clone** and temporary work directories (default `vendor/agent-skills/cache`) |
+| `sources-dir` | Declared directory prefix (included in the content-hash); clone cache uses **`cache-dir`**, not this path |
+| `sources` | List of sources (`type`: `path`, `github`, or `git` with `url` / `path` / `ref` / `skills`) |
+
+Relative directory keys must not use `..` or absolute paths. Lockfile `install-path` / `path` / path-type `url` fields are checked the same way so a tampered lock cannot write outside the project.
+
+### Trust for direct skills
+
+Direct skills use the **same** `extra.ai-agent-skill.allow-skills` map as packages. Keys look like:
+
+`direct:<source-name>/<skill-id>`
+
+Use `composer list-skills` to see the exact `package` column value, then:
+
+```bash
+composer skills:trust 'direct:vercel-labs/skills/find-skills'
+```
+
+See [ADR-012](docs/adr/012-skills-content-hash-and-trust.md): changing allow/deny does **not** change the lock **`content-hash`**; changing **sources** does.
+
+### Disable direct-skill sync
+
+Set environment variable:
+
+`COMPOSER_AGENT_SKILLS=0`
+
+…to skip direct-skill install/update hooks (legacy AGENTS.md behaviour is unchanged).
 
 ## Trust Model
 
@@ -126,7 +213,7 @@ composer skills:trust vendor/foo --revoke   # remove from the map (re-prompts ne
 composer skills:list-trust                  # show every persisted decision
 ```
 
-Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported.
+Or edit `composer.json` directly. Glob patterns (`vendor/*`) are supported. **Direct skills** use keys `direct:<source>/<skill-name>` in the same map — see [Direct sources](#direct-sources-github-and-project-paths).
 
 > ⚠️ **Glob matching is case-sensitive and `*` matches any characters within a pattern segment.** Composer normalizes published package names to lowercase, so write trust patterns in lowercase. A pattern like `acme/skills-*` also trusts `acme/skills-anything-else` — use globs only for namespaces you fully control. Exact-string keys always override matching globs, even when the glob was added first. Prefer explicit per-package entries when in doubt.
 

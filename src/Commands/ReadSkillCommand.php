@@ -6,10 +6,12 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
+use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
+use Netresearch\ComposerAgentSkillPlugin\Util\DiscoveredSkills;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputArgument;
@@ -47,13 +49,20 @@ final class ReadSkillCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        $discovery = $this->discovery;
-        if ($discovery === null) {
-            [$composerJsonPath, $rootName] = $this->resolveContext();
-            $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
-            $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
+        [$composerJsonPath, $rootName] = $this->resolveContext();
+        $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
+        $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
+        $packageSkills = $discovery->discoverAllSkills();
+        $directSkills = (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath));
+        try {
+            $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        } catch (\RuntimeException $e) {
+            $output->writeln('');
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
+            $output->writeln('');
+
+            return self::FAILURE;
         }
-        $skills = $discovery->discoverAllSkills();
 
         // Find the requested skill
         $foundSkill = null;
@@ -114,7 +123,7 @@ final class ReadSkillCommand extends BaseCommand
             $output->writeln('');
         }
 
-        // Display working directory reminder (helps AI agents use correct path for scripts)
+        // Display working directory reminder (correct cwd for bundled scripts)
         $output->writeln('');
         $output->writeln('---');
         $output->writeln(sprintf('<info>ℹ️  Working Directory: %s</info>', $foundSkill['location']));

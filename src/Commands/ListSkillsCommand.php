@@ -6,10 +6,12 @@ namespace Netresearch\ComposerAgentSkillPlugin\Commands;
 
 use Composer\Command\BaseCommand;
 use Composer\IO\ConsoleIO;
+use Netresearch\ComposerAgentSkillPlugin\Discovery\DirectInstalledSkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Package\InstalledVersionsProvider;
 use Netresearch\ComposerAgentSkillPlugin\SkillDiscovery;
 use Netresearch\ComposerAgentSkillPlugin\Trust\SkillTrustManager;
 use Netresearch\ComposerAgentSkillPlugin\Trust\TrustState;
+use Netresearch\ComposerAgentSkillPlugin\Util\DiscoveredSkills;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
@@ -37,20 +39,27 @@ final class ListSkillsCommand extends BaseCommand
         $helperSet = $this->getHelperSet() ?? new HelperSet([new QuestionHelper()]);
         $io = new ConsoleIO($input, $output, $helperSet);
 
-        $discovery = $this->discovery;
-        if ($discovery === null) {
-            [$composerJsonPath, $rootName] = $this->resolveContext();
-            $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
-            $discovery = new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
-        }
+        [$composerJsonPath, $rootName] = $this->resolveContext();
+        $trust = SkillTrustManager::forComposerJson($io, $composerJsonPath, $rootName);
+        $discovery = $this->discovery ?? new SkillDiscovery($io, new InstalledVersionsProvider(), $trust);
 
-        $skills = $discovery->discoverAllSkills();
+        $packageSkills = $discovery->discoverAllSkills();
+        $directSkills = (new DirectInstalledSkillDiscovery())->discoverInstalled($io, $trust, dirname($composerJsonPath));
+        try {
+            $skills = DiscoveredSkills::mergePreferringPackageOrder($packageSkills, $directSkills, $output);
+        } catch (\RuntimeException $e) {
+            $output->writeln('');
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
+            $output->writeln('');
+
+            return self::FAILURE;
+        }
 
         if ($skills === []) {
             $output->writeln('');
-            $output->writeln(' <fg=yellow>[WARNING]</> No AI agent skills found in installed packages.');
+            $output->writeln(' <fg=yellow>[WARNING]</> No AI agent skills found (Composer packages or direct installs).');
             $output->writeln('');
-            $output->writeln(' <fg=cyan>!</> <fg=cyan>[NOTE]</> Install packages declaring extra.ai-agent-skill to register skills.');
+            $output->writeln(' <fg=cyan>!</> <fg=cyan>[NOTE]</> Use extra.ai-agent-skill packages or `composer skills add` for direct sources.');
             $output->writeln('');
             return self::SUCCESS;
         }
