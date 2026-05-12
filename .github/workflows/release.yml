@@ -23,8 +23,12 @@ permissions: {}
 
 jobs:
   release:
-    uses: netresearch/.github/.github/workflows/release-composer-package.yml@main
+    uses: netresearch/.github/.github/workflows/release-composer-package.yml@2c6869a6c4c3ed1afad61569fc587e32b6b7a4db # main
     permissions:
       contents: write
     with:
-      tag: ${{ inputs.tag }}
+      # `inputs.tag` is only populated by workflow_dispatch; on tag-push the
+      # `inputs` context is empty, so we fall back to `github.ref_name` (the
+      # pushed tag). This makes the contract explicit at the caller boundary
+      # instead of relying on the reusable workflow's empty-string fallback.
+      tag: ${{ inputs.tag || github.ref_name }}
