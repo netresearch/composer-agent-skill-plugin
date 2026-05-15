@@ -23,7 +23,7 @@ permissions: {}
 
 jobs:
   release:
-    uses: netresearch/.github/.github/workflows/release-composer-package.yml@2c6869a6c4c3ed1afad61569fc587e32b6b7a4db # main
+    uses: netresearch/.github/.github/workflows/release-composer-package.yml@01926280e0c11a417eab4f4590902e87d6205ded # main
     permissions:
       contents: write
     with:
