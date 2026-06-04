@@ -72,7 +72,17 @@ jobs:
         env:
           # Set to 1 only in air-gapped environments; default runs live clone tests.
           SKIP_NETWORK_TESTS: ${{ vars.SKIP_NETWORK_TESTS }}
-        run: vendor/bin/phpunit --testdox
+          # The @group network tests clone PUBLIC repos and need no GitHub auth.
+          # Clear any configured token so the composer/composer 2.2.0 library
+          # (installed in the prefer-lowest cell) does not reject the modern
+          # GitHub token format with "github oauth token … contains invalid
+          # characters". The composer binary is unaffected — this only concerns
+          # the library instantiated by the tests.
+          COMPOSER_AUTH: "{}"
+          GITHUB_TOKEN: ""
+        run: |
+          composer config --global --unset github-oauth.github.com 2>/dev/null || true
+          vendor/bin/phpunit --testdox
 
   code-quality:
     name: Code Quality
