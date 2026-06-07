@@ -84,78 +84,29 @@ jobs:
           composer config --global --unset github-oauth.github.com 2>/dev/null || true
           vendor/bin/phpunit --testdox
 
-  code-quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, xml, ctype, iconv
-          tools: php-cs-fixer
-          coverage: none
-
-      - name: Get Composer cache directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.json') }}
-          restore-keys: |
-            ${{ runner.os }}-php-8.4-composer-
-
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
-
-      - name: Run PHPStan
-        run: vendor/bin/phpstan analyse --error-format=github
-
-      - name: Run PHP-CS-Fixer (dry run)
-        run: php-cs-fixer fix --dry-run --diff --allow-risky=yes
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, xml, ctype, iconv
-          coverage: xdebug
-
-      - name: Get Composer cache directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.json') }}
-          restore-keys: |
-            ${{ runner.os }}-php-8.4-composer-
-
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
-
-      - name: Run tests with coverage
-        run: vendor/bin/phpunit --coverage-text --coverage-clover=coverage.xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
+  # PHPStan + PHP-CS-Fixer + PHPUnit-with-coverage + Codecov upload, via
+  # the org-standard reusable. The bespoke `tests` job above stays inline
+  # because the reusable matrices on PHP version only and cannot express
+  # this plugin's Symfony x Composer x prefer-lowest matrix or its
+  # network-test env. Folding these checks into the reusable removes the
+  # per-repo codecov-action reference that Renovate kept bumping.
+  checks:
+    name: Checks
+    uses: netresearch/.github/.github/workflows/php-ci.yml@main
+    permissions:
+      contents: read
+    with:
+      php-versions: '["8.4"]'
+      extensions: "mbstring, xml, ctype, iconv"
+      extra-tools: "php-cs-fixer"
+      coverage: "xdebug"
+      run-phpstan: true
+      phpstan-cmd: "vendor/bin/phpstan analyse --error-format=github"
+      run-cs-fixer: true
+      cs-fixer-cmd: "php-cs-fixer fix --dry-run --diff --allow-risky=yes"
+      run-phpunit: true
+      phpunit-cmd: "vendor/bin/phpunit --coverage-clover=coverage.xml"
+      upload-coverage-codecov: true
+      coverage-php-version: "8.4"
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
