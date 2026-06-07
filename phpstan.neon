@@ -4,3 +4,17 @@ parameters:
         - src
     excludePaths:
         - tests
+    ignoreErrors:
+        # `method_exists($this, 'tryComposer')` in CommandContextTrait is an
+        # intentional runtime guard: Composer 2.2 LTS has no tryComposer()
+        # (only the deprecated getComposer()), while >=2.3 does. PHPStan
+        # analyses against the *highest* resolved Composer (which has the
+        # method), so it narrows the check to always-true — once per command
+        # class that uses the trait. The guard must stay for the 2.2.*
+        # support path (composer.json: "2.2.*|^2.9"), so the finding is
+        # suppressed here. An inline @phpstan-ignore-next-line does not match
+        # all per-class trait analyses, hence the path-scoped ignore.
+        -
+            identifier: function.alreadyNarrowedType
+            path: src/Commands/CommandContextTrait.php
+            reportUnmatched: false
