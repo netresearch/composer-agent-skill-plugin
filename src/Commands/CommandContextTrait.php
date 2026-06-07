@@ -29,7 +29,8 @@ trait CommandContextTrait
     {
         // tryComposer() was introduced in Composer 2.3; 2.2 LTS only has
         // the deprecated getComposer(). Resolve in a way that works on both.
-        /** @phpstan-ignore-next-line function.alreadyNarrowedType */
+        // (The always-true narrowing PHPStan reports here under Composer >=2.3
+        // is suppressed via phpstan.neon — see the ignoreErrors note there.)
         if (method_exists($this, 'tryComposer')) {
             $composer = $this->tryComposer();
         } else {
