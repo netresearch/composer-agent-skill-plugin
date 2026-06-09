@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [2.1.1] - 2026-06-09
+
+### Changed
+
+- Dependency updates (Renovate); CI now uses org reusable workflows.
+
+### Fixed
+
+- Suppress always-true PHPStan narrowing on the Composer `tryComposer` guard.
+
 ## [2.1.0] - 2026-05-12
 
 ### Added
@@ -178,7 +188,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Path Traversal Protection**: Uses `realpath()` to resolve canonical paths
 - **XML Escaping**: Properly escapes skill metadata in generated XML
 
-[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.5...v2.0.0
 [1.1.5]: https://github.com/netresearch/composer-agent-skill-plugin/compare/v1.1.4...v1.1.5
