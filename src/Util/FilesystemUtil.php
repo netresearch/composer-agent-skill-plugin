@@ -64,7 +64,7 @@ final class FilesystemUtil
                 if (is_dir($path) && !rmdir($path)) {
                     self::reportFsFailure($io, 'rmdir', $path);
                 }
-            // recursive cleanup of plugin-managed directory contents; path from directory iteration, not user input
+                // recursive cleanup of plugin-managed directory contents; path from directory iteration, not user input
             } elseif (file_exists($path) && !unlink($path)) { // nosemgrep: php.lang.security.unlink-use.unlink-use
                 self::reportFsFailure($io, 'unlink', $path);
             }
