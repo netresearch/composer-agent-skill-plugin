@@ -115,7 +115,8 @@ final class TrustStore
                 return;
             }
             if (!@rename($tempPath, $this->composerJsonPath)) {
-                @unlink($tempPath);
+                // cleanup of our own freshly-created temp file (random name) on atomic-write rename failure; path is not user input
+                @unlink($tempPath); // nosemgrep: php.lang.security.unlink-use.unlink-use
                 $this->io->writeError(sprintf(
                     '<error>Failed to atomically replace %s with trust decisions.</error>',
                     $this->composerJsonPath,

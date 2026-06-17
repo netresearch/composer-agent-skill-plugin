@@ -1,34 +1,22 @@
 name: Release
 
-# Triggered by signed-tag push (`v*`). Delegates the entire release to the
-# org's `release-composer-package` reusable workflow, which validates the
-# tag (semver, annotated/signed), validates `composer.json`, and creates
-# the GitHub Release atomically with auto-generated notes.
-#
-# Packagist syncs the new version via webhook on tag push, independent of
-# this workflow.
+# Skill release pipeline (composer/npm package publish + Sigstore cosign +
+# SHA256SUMS attestation) via the skill-repo-skill reusable. The reusable's
+# release job declares contents/id-token/attestations: write; the calling job
+# grants exactly that union. id-token + attestations are required for the
+# OIDC-backed Sigstore signing and the GitHub native attestation API.
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to release (e.g. v2.1.0). Used for backfills."
-        required: true
-        type: string
 
 permissions: {}
 
 jobs:
   release:
-    uses: netresearch/.github/.github/workflows/release-composer-package.yml@main
+    uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
     permissions:
-      contents: write
-    with:
-      # `inputs.tag` is only populated by workflow_dispatch; on tag-push the
-      # `inputs` context is empty, so we fall back to `github.ref_name` (the
-      # pushed tag). This makes the contract explicit at the caller boundary
-      # instead of relying on the reusable workflow's empty-string fallback.
-      tag: ${{ inputs.tag || github.ref_name }}
+      contents: write          # release upload
+      id-token: write          # OIDC for sigstore (cosign + attest)
+      attestations: write      # GitHub native attestation API

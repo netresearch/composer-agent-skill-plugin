@@ -119,7 +119,8 @@ final class AgentsMdGenerator
         }
 
         if (!rename($tempPath, $agentsMdPath)) {
-            @unlink($tempPath);
+            // cleanup of our own freshly-created temp file (random name) on atomic-write rename failure; path is not user input
+            @unlink($tempPath); // nosemgrep: php.lang.security.unlink-use.unlink-use
             throw new \RuntimeException(sprintf('Failed to rename temporary file to: %s', $agentsMdPath));
         }
     }

@@ -62,7 +62,8 @@ final class ComposerJsonDirectSkillsWriter
             throw new \RuntimeException(sprintf('Failed writing temp composer.json: %s', $temp));
         }
         if (!rename($temp, $composerJsonPath)) {
-            @unlink($temp);
+            // cleanup of our own freshly-created temp file (random name) on atomic-write rename failure; path is not user input
+            @unlink($temp); // nosemgrep: php.lang.security.unlink-use.unlink-use
             throw new \RuntimeException(sprintf('Failed replacing composer.json: %s', $composerJsonPath));
         }
     }
@@ -119,7 +120,8 @@ final class ComposerJsonDirectSkillsWriter
             throw new \RuntimeException(sprintf('Failed writing temp composer.json: %s', $temp));
         }
         if (!rename($temp, $composerJsonPath)) {
-            @unlink($temp);
+            // cleanup of our own freshly-created temp file (random name) on atomic-write rename failure; path is not user input
+            @unlink($temp); // nosemgrep: php.lang.security.unlink-use.unlink-use
             throw new \RuntimeException(sprintf('Failed replacing composer.json: %s', $composerJsonPath));
         }
     }
