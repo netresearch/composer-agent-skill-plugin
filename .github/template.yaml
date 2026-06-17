@@ -1,20 +1,11 @@
-# Managed by netresearch/.github/templates/skill/
+# Managed by netresearch/.github/templates/php-module/
 # Drift from the template is blocking CI in this repo (check-template-drift.yml).
 # Record explicit exceptions under intentional-drift[] to unblock.
 #
-# CodeQL: skill repos use GitHub **CodeQL default setup** (a repo setting,
-# enabled via Settings > Code security, or `gh api -X PUT
-# repos/<owner>/<repo>/code-scanning/default-setup -f state=configured`).
-# Default setup auto-detects the repo's interpreted languages and conflicts
-# with an advanced codeql.yml workflow — so this template intentionally ships
-# NO codeql.yml. Scorecard (scorecard.yml) is separate and IS templated.
-#
-# Common opt-ins for skill repos (list the file here so the template sync
-# stops managing it, then customize it in-repo):
-#   - .github/workflows/validate-agents.yml  (only for skills that ship an
-#     AGENTS.md generator under skills/<name>/scripts; the reusable's
-#     scripts-path input is repo-specific so this is never byte-identical)
-#   - .github/dependabot.yml  (when the repo has npm fixtures/devcontainers
-#     beyond the guaranteed github-actions + composer ecosystems)
-template: skill
+# For PHP modules (Magento 2 / Shopware 6 / composer SDKs). CI surface is the
+# security/quality reusables with explicit per-call-site permissions (immune to
+# a restricted default_workflow_permissions). CodeQL is via GitHub default setup
+# (a repo setting), so no codeql.yml here. Add a test workflow per repo as
+# needed and list it under intentional-drift.
+template: php-module
 intentional-drift: []

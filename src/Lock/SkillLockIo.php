@@ -53,7 +53,8 @@ final class SkillLockIo
             throw new \RuntimeException(sprintf('Failed writing temporary skills lock: %s', $temp));
         }
         if (!rename($temp, $path)) {
-            @unlink($temp);
+            // cleanup of our own freshly-created temp file (random name) on atomic-write rename failure; path is not user input
+            @unlink($temp); // nosemgrep: php.lang.security.unlink-use.unlink-use
             throw new \RuntimeException(sprintf('Failed replacing skills lock: %s', $path));
         }
     }
