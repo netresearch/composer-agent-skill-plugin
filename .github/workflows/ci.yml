@@ -50,12 +50,16 @@ jobs:
       #
       # Deliberately EMPTY on the prefer-lowest cell. It would be redundant
       # there — the floor of `^5.4|^6.0|^7.0|^8.0` is 5.4, which is exactly
-      # what --prefer-lowest resolves to anyway — and it is actively harmful:
-      # flex filters the solver pool on PRE_POOL_CREATE, and under Composer
-      # 2.2 with --prefer-lowest that drops the fixed platform package, so
-      # the resolve dies with "Fixed package ext-igbinary 3.2.17RC1 was not
-      # added to solver pool". The other Composer 2.2 cells are unaffected.
-      symfony-require: ${{ matrix.prefer-lowest && '' || matrix.symfony }}
+      # what --prefer-lowest resolves to anyway — and it appears to be
+      # harmful: with flex active that cell dies in the solver with "Fixed
+      # package ext-igbinary 3.2.17RC1 was not added to solver pool". The
+      # other Composer 2.2 cells are unaffected.
+      #
+      # Written as `!cond && value || ''` and NOT as `cond && '' || value`:
+      # the empty string is FALSY in GitHub expressions, so the second form
+      # falls through to the `||` branch in both cases and silently yields
+      # the value it was supposed to suppress.
+      symfony-require: ${{ !matrix.prefer-lowest && matrix.symfony || '' }}
       dependency-versions: ${{ matrix.prefer-lowest && 'lowest' || 'highest' }}
       # Symfony major and Composer version come from the CALLER matrix, so the
       # reusable cannot derive them; without this every cell of a PHP version
