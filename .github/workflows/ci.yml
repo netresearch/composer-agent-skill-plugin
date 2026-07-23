@@ -7,14 +7,21 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
+  # Compatibility matrix: PHP x Symfony x Composer host version, plus one
+  # `--prefer-lowest` cell that exercises the declared dependency minimums.
+  #
+  # The org-standard reusable matrices on PHP only, so the remaining
+  # dimensions live in the caller matrix and are handed to the reusable
+  # per cell:
+  #   * Composer host version -> `extra-tools: composer:<version>`
+  #     (shivammathur/setup-php keeps the LAST composer entry of the tools
+  #     list, so this overrides the reusable's always-on `composer:v2`)
+  #   * Symfony constraint + lowest-deps resolution -> `pre-install-cmd`
   tests:
-    name: PHP ${{ matrix.php }} - Symfony ${{ matrix.symfony }} - Composer ${{ matrix.composer }}${{ matrix.prefer-lowest && ' (lowest)' || '' }}
-    runs-on: ubuntu-latest
-
+    name: Symfony ${{ matrix.symfony }} - Composer ${{ matrix.composer }}${{ matrix.prefer-lowest && ' (lowest)' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,68 +35,28 @@ jobs:
             symfony: '5.4.*'
             composer: '2.2'
             prefer-lowest: true
+    uses: netresearch/.github/.github/workflows/php-ci.yml@main
+    permissions:
+      contents: read
+    with:
+      php-versions: '["${{ matrix.php }}"]'
+      extensions: "mbstring, xml, ctype, iconv"
+      extra-tools: "composer:${{ matrix.composer }}"
+      coverage: "none"
+      pre-install-cmd: >-
+        composer require "symfony/yaml:${{ matrix.symfony }}" "symfony/console:${{ matrix.symfony }}" --no-update --no-interaction &&
+        composer update --prefer-dist --no-progress ${{ matrix.prefer-lowest && '--prefer-lowest --prefer-stable' || '' }}
+      run-phpstan: false
+      run-phpunit: true
+      # Runs the @group network tests, which clone PUBLIC repos and need no
+      # GitHub auth. Clear any configured token so the composer/composer
+      # 2.2.0 library (installed in the prefer-lowest cell) does not reject
+      # the modern GitHub token format with "github oauth token … contains
+      # invalid characters". The composer binary is unaffected — this only
+      # concerns the library instantiated by the tests.
+      phpunit-cmd: "composer config --global --unset github-oauth.github.com 2>/dev/null || true; COMPOSER_AUTH='{}' GITHUB_TOKEN='' vendor/bin/phpunit --testdox"
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
-        with:
-          php-version: ${{ matrix.php }}
-          tools: composer:${{ matrix.composer }}
-          extensions: mbstring, xml, ctype, iconv
-          coverage: none
-
-      - name: Validate composer.json
-        run: composer validate --strict
-
-      - name: Get Composer cache directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-${{ matrix.php }}-symfony-${{ matrix.symfony }}-composer-${{ matrix.composer }}-${{ matrix.prefer-lowest && 'low' || 'high' }}-${{ hashFiles('**/composer.json') }}
-          restore-keys: |
-            ${{ runner.os }}-php-${{ matrix.php }}-symfony-${{ matrix.symfony }}-composer-${{ matrix.composer }}-
-            ${{ runner.os }}-php-${{ matrix.php }}-symfony-${{ matrix.symfony }}-
-            ${{ runner.os }}-php-${{ matrix.php }}-
-            ${{ runner.os }}-php-
-
-      - name: Install dependencies
-        env:
-          SYMFONY_VERSION: ${{ matrix.symfony }}
-          UPDATE_FLAGS: ${{ matrix.prefer-lowest && '--prefer-lowest --prefer-stable' || '' }}
-        run: |
-          composer require "symfony/yaml:${SYMFONY_VERSION}" "symfony/console:${SYMFONY_VERSION}" --no-update --no-interaction
-          # shellcheck disable=SC2086
-          composer update --prefer-dist --no-progress ${UPDATE_FLAGS}
-
-      - name: Run tests (incl. @group network — GitHub + git)
-        env:
-          # Set to 1 only in air-gapped environments; default runs live clone tests.
-          SKIP_NETWORK_TESTS: ${{ vars.SKIP_NETWORK_TESTS }}
-          # The @group network tests clone PUBLIC repos and need no GitHub auth.
-          # Clear any configured token so the composer/composer 2.2.0 library
-          # (installed in the prefer-lowest cell) does not reject the modern
-          # GitHub token format with "github oauth token … contains invalid
-          # characters". The composer binary is unaffected — this only concerns
-          # the library instantiated by the tests.
-          COMPOSER_AUTH: "{}"
-          GITHUB_TOKEN: ""
-        run: |
-          composer config --global --unset github-oauth.github.com 2>/dev/null || true
-          vendor/bin/phpunit --testdox
-
-  # PHPStan + PHP-CS-Fixer + PHPUnit-with-coverage + Codecov upload, via
-  # the org-standard reusable. The bespoke `tests` job above stays inline
-  # because the reusable matrices on PHP version only and cannot express
-  # this plugin's Symfony x Composer x prefer-lowest matrix or its
-  # network-test env. Folding these checks into the reusable removes the
-  # per-repo codecov-action reference that Renovate kept bumping.
+  # PHPStan + PHP-CS-Fixer + PHPUnit-with-coverage + Codecov upload.
   checks:
     name: Checks
     uses: netresearch/.github/.github/workflows/php-ci.yml@main
