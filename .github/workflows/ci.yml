@@ -13,13 +13,12 @@ jobs:
   # Compatibility matrix: PHP x Symfony x Composer host version, plus one
   # `--prefer-lowest` cell that exercises the declared dependency minimums.
   #
-  # The org-standard reusable matrices on PHP only, so the remaining
-  # dimensions live in the caller matrix and are handed to the reusable
-  # per cell:
-  #   * Composer host version -> `extra-tools: composer:<version>`
-  #     (shivammathur/setup-php keeps the LAST composer entry of the tools
-  #     list, so this overrides the reusable's always-on `composer:v2`)
-  #   * Symfony constraint + lowest-deps resolution -> `pre-install-cmd`
+  # Each dimension is now a NAMED input of the shared reusable rather than a
+  # command string assembled here:
+  #   * Composer host version    -> `composer-version`
+  #   * Symfony constraint       -> `symfony-require` (flex + SYMFONY_REQUIRE)
+  #   * lowest-deps resolution   -> `dependency-versions`
+  #   * per-cell composer cache  -> `cache-key-suffix`
   tests:
     name: Symfony ${{ matrix.symfony }} - Composer ${{ matrix.composer }}${{ matrix.prefer-lowest && ' (lowest)' || '' }}
     strategy:
@@ -41,11 +40,31 @@ jobs:
     with:
       php-versions: '["${{ matrix.php }}"]'
       extensions: "mbstring, xml, ctype, iconv"
-      extra-tools: "composer:${{ matrix.composer }}"
+      composer-version: ${{ matrix.composer }}
       coverage: "none"
-      pre-install-cmd: >-
-        composer require "symfony/yaml:${{ matrix.symfony }}" "symfony/console:${{ matrix.symfony }}" --no-update --no-interaction &&
-        composer update --prefer-dist --no-progress ${{ matrix.prefer-lowest && '--prefer-lowest --prefer-stable' || '' }}
+      # symfony/flex pins the WHOLE Symfony stack to the cell's major,
+      # transitive packages included. The previous `composer require` pinned
+      # symfony/yaml and symfony/console by name only — composer.json also
+      # requires symfony/process, which therefore resolved to whatever
+      # version fit while the cell still claimed to test one Symfony major.
+      #
+      # Deliberately EMPTY on the prefer-lowest cell. It would be redundant
+      # there — the floor of `^5.4|^6.0|^7.0|^8.0` is 5.4, which is exactly
+      # what --prefer-lowest resolves to anyway — and it appears to be
+      # harmful: with flex active that cell dies in the solver with "Fixed
+      # package ext-igbinary 3.2.17RC1 was not added to solver pool". The
+      # other Composer 2.2 cells are unaffected.
+      #
+      # Written as `!cond && value || ''` and NOT as `cond && '' || value`:
+      # the empty string is FALSY in GitHub expressions, so the second form
+      # falls through to the `||` branch in both cases and silently yields
+      # the value it was supposed to suppress.
+      symfony-require: ${{ !matrix.prefer-lowest && matrix.symfony || '' }}
+      dependency-versions: ${{ matrix.prefer-lowest && 'lowest' || 'highest' }}
+      # Symfony major and Composer version come from the CALLER matrix, so the
+      # reusable cannot derive them; without this every cell of a PHP version
+      # shares one cache entry and they evict each other.
+      cache-key-suffix: sf${{ matrix.symfony }}-c${{ matrix.composer }}
       run-phpstan: false
       run-phpunit: true
       # Runs the @group network tests, which clone PUBLIC repos and need no
@@ -54,7 +73,13 @@ jobs:
       # the modern GitHub token format with "github oauth token … contains
       # invalid characters". The composer binary is unaffected — this only
       # concerns the library instantiated by the tests.
-      phpunit-cmd: "composer config --global --unset github-oauth.github.com 2>/dev/null || true; COMPOSER_AUTH='{}' GITHUB_TOKEN='' vendor/bin/phpunit --testdox"
+      #
+      # COMPOSER_AUTH moved to check-env; GITHUB_TOKEN cannot follow it,
+      # because check-env refuses GITHUB_*/RUNNER_* keys by design so a
+      # caller cannot overwrite the runner's own contract.
+      check-env: |
+        COMPOSER_AUTH={}
+      phpunit-cmd: "composer config --global --unset github-oauth.github.com 2>/dev/null || true; GITHUB_TOKEN='' vendor/bin/phpunit --testdox"
 
   # PHPStan + PHP-CS-Fixer + PHPUnit-with-coverage + Codecov upload.
   checks:
