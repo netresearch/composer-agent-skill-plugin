@@ -13,13 +13,12 @@ jobs:
   # Compatibility matrix: PHP x Symfony x Composer host version, plus one
   # `--prefer-lowest` cell that exercises the declared dependency minimums.
   #
-  # The org-standard reusable matrices on PHP only, so the remaining
-  # dimensions live in the caller matrix and are handed to the reusable
-  # per cell:
-  #   * Composer host version -> `extra-tools: composer:<version>`
-  #     (shivammathur/setup-php keeps the LAST composer entry of the tools
-  #     list, so this overrides the reusable's always-on `composer:v2`)
-  #   * Symfony constraint + lowest-deps resolution -> `pre-install-cmd`
+  # Each dimension is now a NAMED input of the shared reusable rather than a
+  # command string assembled here:
+  #   * Composer host version    -> `composer-version`
+  #   * Symfony constraint       -> `symfony-require` (flex + SYMFONY_REQUIRE)
+  #   * lowest-deps resolution   -> `dependency-versions`
+  #   * per-cell composer cache  -> `cache-key-suffix`
   tests:
     name: Symfony ${{ matrix.symfony }} - Composer ${{ matrix.composer }}${{ matrix.prefer-lowest && ' (lowest)' || '' }}
     strategy:
@@ -41,11 +40,19 @@ jobs:
     with:
       php-versions: '["${{ matrix.php }}"]'
       extensions: "mbstring, xml, ctype, iconv"
-      extra-tools: "composer:${{ matrix.composer }}"
+      composer-version: ${{ matrix.composer }}
       coverage: "none"
-      pre-install-cmd: >-
-        composer require "symfony/yaml:${{ matrix.symfony }}" "symfony/console:${{ matrix.symfony }}" --no-update --no-interaction &&
-        composer update --prefer-dist --no-progress ${{ matrix.prefer-lowest && '--prefer-lowest --prefer-stable' || '' }}
+      # symfony/flex pins the WHOLE Symfony stack to the cell's major,
+      # transitive packages included. The previous `composer require` pinned
+      # symfony/yaml and symfony/console by name only — composer.json also
+      # requires symfony/process, which therefore resolved to whatever
+      # version fit while the cell still claimed to test one Symfony major.
+      symfony-require: ${{ matrix.symfony }}
+      dependency-versions: ${{ matrix.prefer-lowest && 'lowest' || 'highest' }}
+      # Symfony major and Composer version come from the CALLER matrix, so the
+      # reusable cannot derive them; without this every cell of a PHP version
+      # shares one cache entry and they evict each other.
+      cache-key-suffix: sf${{ matrix.symfony }}-c${{ matrix.composer }}
       run-phpstan: false
       run-phpunit: true
       # Runs the @group network tests, which clone PUBLIC repos and need no
@@ -54,7 +61,13 @@ jobs:
       # the modern GitHub token format with "github oauth token … contains
       # invalid characters". The composer binary is unaffected — this only
       # concerns the library instantiated by the tests.
-      phpunit-cmd: "composer config --global --unset github-oauth.github.com 2>/dev/null || true; COMPOSER_AUTH='{}' GITHUB_TOKEN='' vendor/bin/phpunit --testdox"
+      #
+      # COMPOSER_AUTH moved to check-env; GITHUB_TOKEN cannot follow it,
+      # because check-env refuses GITHUB_*/RUNNER_* keys by design so a
+      # caller cannot overwrite the runner's own contract.
+      check-env: |
+        COMPOSER_AUTH={}
+      phpunit-cmd: "composer config --global --unset github-oauth.github.com 2>/dev/null || true; GITHUB_TOKEN='' vendor/bin/phpunit --testdox"
 
   # PHPStan + PHP-CS-Fixer + PHPUnit-with-coverage + Codecov upload.
   checks:
